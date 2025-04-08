@@ -36,12 +36,12 @@ import { useToast } from "@/hooks/use-toast";
 const formSchema = z.object({
   name: z.string().min(1, "자재명은 필수 입력 항목입니다."),
   categoryId: z.coerce.number().min(1, "카테고리를 선택해주세요."),
-  specification: z.string().optional(),
+  specification: z.string().optional().nullable(),
   currentQuantity: z.coerce.number().min(0, "수량은 0 이상이어야 합니다."),
   minimumQuantity: z.coerce.number().min(0, "최소 수량은 0 이상이어야 합니다."),
-  location: z.string().optional(),
-  unitPrice: z.coerce.number().min(0, "단가는 0 이상이어야 합니다.").optional().or(z.literal('')),
-  notes: z.string().optional(),
+  location: z.string().optional().nullable(),
+  unitPrice: z.coerce.number().min(0, "단가는 0 이상이어야 합니다.").optional().nullable(),
+  notes: z.string().optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -68,12 +68,12 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      categoryId: 0,
+      categoryId: categories && categories.length > 0 ? categories[0].id : 1,
       specification: "",
       currentQuantity: 0,
       minimumQuantity: 0,
       location: "",
-      unitPrice: "",
+      unitPrice: null,
       notes: "",
     },
   });
@@ -81,6 +81,9 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
   // Set default values when editing
   useEffect(() => {
     if (itemToEdit) {
+      // 수정 모드일 때
+      const unitPrice = typeof itemToEdit.unitPrice === 'number' ? itemToEdit.unitPrice : null;
+      
       form.reset({
         name: itemToEdit.name,
         categoryId: itemToEdit.categoryId,
@@ -88,22 +91,23 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
         currentQuantity: itemToEdit.currentQuantity,
         minimumQuantity: itemToEdit.minimumQuantity,
         location: itemToEdit.location || "",
-        unitPrice: itemToEdit.unitPrice as number | undefined || "",
+        unitPrice: unitPrice,
         notes: itemToEdit.notes || "",
       });
-    } else {
+    } else if (categories.length > 0) {
+      // 생성 모드일 때
       form.reset({
         name: "",
-        categoryId: 0,
+        categoryId: categories[0].id,
         specification: "",
         currentQuantity: 0,
         minimumQuantity: 0,
         location: "",
-        unitPrice: "",
+        unitPrice: null,
         notes: "",
       });
     }
-  }, [itemToEdit, form]);
+  }, [itemToEdit, form, categories]);
 
   // Create mutation
   const createItemMutation = useMutation({
@@ -155,10 +159,13 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
   });
 
   const onSubmit = (data: FormValues) => {
-    // Process empty string to undefined for optional numeric field
+    // 빈 문자열 또는 null을 undefined로 처리
     const processedData = {
       ...data,
-      unitPrice: data.unitPrice === '' ? undefined : data.unitPrice,
+      specification: data.specification || undefined,
+      location: data.location || undefined,
+      unitPrice: data.unitPrice || undefined,
+      notes: data.notes || undefined,
     };
 
     if (isEditMode && itemToEdit) {
@@ -184,22 +191,15 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
               <div>
-                <FormField
-                  control={form.control}
-                  name="code"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>자재 코드</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="자동 생성" 
-                          value={itemToEdit?.code || "자동 생성"} 
-                          disabled 
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                <div className="space-y-2">
+                  <div className="font-medium text-sm">자재 코드</div>
+                  <Input 
+                    placeholder="자동 생성" 
+                    value={itemToEdit?.code || "자동 생성"} 
+                    disabled 
+                    className="bg-gray-100"
+                  />
+                </div>
               </div>
 
               <div>
@@ -331,15 +331,19 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
                 <FormField
                   control={form.control}
                   name="unitPrice"
-                  render={({ field }) => (
+                  render={({ field: { onChange, value, ...rest } }) => (
                     <FormItem>
                       <FormLabel>단가</FormLabel>
                       <FormControl>
                         <Input 
-                          {...field}
+                          {...rest}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            onChange(val === "" ? null : Number(val));
+                          }}
                           type="number" 
                           min="0"
-                          value={field.value === undefined ? "" : field.value}
+                          value={value === null ? "" : value}
                         />
                       </FormControl>
                       <FormMessage />
