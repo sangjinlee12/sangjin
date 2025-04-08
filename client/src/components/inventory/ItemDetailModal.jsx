@@ -23,6 +23,12 @@ const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }) => {
     isError: isItemError
   } = useQuery({
     queryKey: ['/api/items', itemId],
+    queryFn: async () => {
+      if (!itemId) return null;
+      const response = await fetch(`/api/items/${itemId}`);
+      if (!response.ok) throw new Error('Failed to fetch item');
+      return response.json();
+    },
     enabled: isOpen && itemId !== null
   });
 
@@ -32,12 +38,23 @@ const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }) => {
     isLoading: isLoadingTransactions
   } = useQuery({
     queryKey: ['/api/transactions/item', itemId],
+    queryFn: async () => {
+      if (!itemId) return [];
+      const response = await fetch(`/api/transactions/item/${itemId}`);
+      if (!response.ok) throw new Error('Failed to fetch transactions');
+      return response.json();
+    },
     enabled: isOpen && itemId !== null
   });
 
   // Fetch all categories
   const { data: categories = [] } = useQuery({
     queryKey: ['/api/categories'],
+    queryFn: async () => {
+      const response = await fetch('/api/categories');
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      return response.json();
+    },
     enabled: isOpen
   });
 
@@ -189,7 +206,7 @@ const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }) => {
                         <li key={transaction.id} className="p-3">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center">
-                              <span className={`material-icons text-${transaction.type === 'in' ? 'green-600' : 'red-600'} text-sm mr-2`}>
+                              <span className={transaction.type === 'in' ? 'material-icons text-green-600 text-sm mr-2' : 'material-icons text-red-600 text-sm mr-2'}>
                                 {transaction.type === 'in' ? 'add_circle' : 'remove_circle'}
                               </span>
                               <div>
