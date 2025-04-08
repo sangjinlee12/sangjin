@@ -357,6 +357,7 @@ export class MemStorage implements IStorage {
 // 데이터베이스 스토리지 구현
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
+import { TransactionType, UnitType } from "@shared/schema";
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
@@ -488,23 +489,35 @@ export class DatabaseStorage implements IStorage {
     // 현재 날짜
     const now = new Date();
     
+    // 모든 필수 필드가 있고 null이 필요한 곳에 명시적으로 null 설정
+    const itemToInsert = {
+      name: insertItem.name,
+      categoryId: insertItem.categoryId,
+      code: code,
+      specification: insertItem.specification || null,
+      unitType: insertItem.unitType || null,
+      currentQuantity: insertItem.currentQuantity || 0,
+      minimumQuantity: insertItem.minimumQuantity || 0,
+      location: insertItem.location || null,
+      unitPrice: insertItem.unitPrice ? String(insertItem.unitPrice) : null, // 숫자를 문자열로 변환
+      notes: insertItem.notes || null,
+      createdAt: now,
+      updatedAt: now
+    };
+    
     // Drizzle ORM을 사용해 데이터베이스에 삽입
     const [item] = await db
       .insert(inventoryItems)
-      .values({
-        ...insertItem,
-        code,
-        createdAt: now,
-        updatedAt: now
-      })
+      .values(itemToInsert)
       .returning();
     
     // 초기 재고 트랜잭션 생성 (초기 수량이 0보다 크면)
-    if (insertItem.currentQuantity > 0) {
+    const initialQuantity = insertItem.currentQuantity || 0;
+    if (initialQuantity > 0) {
       await this.createTransaction({
         itemId: item.id,
         type: TransactionType.IN,
-        quantity: insertItem.currentQuantity,
+        quantity: initialQuantity,
         project: "초기 등록",
         note: "자재 최초 등록"
       });
@@ -517,12 +530,25 @@ export class DatabaseStorage implements IStorage {
     // 업데이트할 때 updatedAt 필드를 현재 시간으로 설정
     const now = new Date();
     
+    // 타입 호환성을 위해 데이터 변환
+    const updateData: any = {
+      updatedAt: now
+    };
+    
+    // 각 필드에 대해 타입 호환성 확보
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
+    if (data.specification !== undefined) updateData.specification = data.specification || null;
+    if (data.unitType !== undefined) updateData.unitType = data.unitType || null;
+    if (data.currentQuantity !== undefined) updateData.currentQuantity = data.currentQuantity;
+    if (data.minimumQuantity !== undefined) updateData.minimumQuantity = data.minimumQuantity;
+    if (data.location !== undefined) updateData.location = data.location || null;
+    if (data.unitPrice !== undefined) updateData.unitPrice = data.unitPrice ? String(data.unitPrice) : null;
+    if (data.notes !== undefined) updateData.notes = data.notes || null;
+    
     const [updatedItem] = await db
       .update(inventoryItems)
-      .set({
-        ...data,
-        updatedAt: now
-      })
+      .set(updateData)
       .where(eq(inventoryItems.id, id))
       .returning();
     
@@ -554,10 +580,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
+    // 트랜잭션 생성 - null 처리를 명시적으로 해줌
+    const transactionToInsert = {
+      itemId: insertTransaction.itemId,
+      type: insertTransaction.type,
+      quantity: insertTransaction.quantity,
+      project: insertTransaction.project || null,
+      note: insertTransaction.note || null
+    };
+    
     // 트랜잭션 생성
     const [transaction] = await db
       .insert(transactions)
-      .values(insertTransaction)
+      .values(transactionToInsert)
       .returning();
     
     // 재고 아이템 가져오기
