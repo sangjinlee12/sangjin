@@ -1,9 +1,14 @@
 import { 
   users, categories, inventoryItems, transactions, 
+  purchaseOrders, purchaseOrderItems,
   type User, type InsertUser,
   type Category, type InsertCategory, 
   type InventoryItem, type InsertInventoryItem,
-  type Transaction, type InsertTransaction
+  type PurchaseOrder, type InsertPurchaseOrder,
+  type PurchaseOrderItem, type InsertPurchaseOrderItem,
+  PurchaseOrderStatus,
+  type Transaction, type InsertTransaction,
+  TransactionType, UnitType
 } from "@shared/schema";
 
 export interface IStorage {
@@ -34,6 +39,21 @@ export interface IStorage {
   getAllTransactions(): Promise<Transaction[]>;
   getTransactionsByItemId(itemId: number): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  
+  // Purchase order methods
+  getAllPurchaseOrders(): Promise<PurchaseOrder[]>;
+  getPurchaseOrderById(id: number): Promise<PurchaseOrder | undefined>;
+  getPurchaseOrderByOrderNumber(orderNumber: string): Promise<PurchaseOrder | undefined>;
+  getPurchaseOrdersByStatus(status: PurchaseOrderStatus): Promise<PurchaseOrder[]>;
+  createPurchaseOrder(purchaseOrder: InsertPurchaseOrder): Promise<PurchaseOrder>;
+  updatePurchaseOrder(id: number, data: Partial<InsertPurchaseOrder>): Promise<PurchaseOrder | undefined>;
+  deletePurchaseOrder(id: number): Promise<boolean>;
+  
+  // Purchase order items methods
+  getPurchaseOrderItems(purchaseOrderId: number): Promise<PurchaseOrderItem[]>;
+  createPurchaseOrderItem(item: InsertPurchaseOrderItem): Promise<PurchaseOrderItem>;
+  updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem | undefined>;
+  deletePurchaseOrderItem(id: number): Promise<boolean>;
   
   // Dashboard methods
   getDashboardStats(): Promise<{
@@ -357,7 +377,6 @@ export class MemStorage implements IStorage {
 // 데이터베이스 스토리지 구현
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
-import { TransactionType, UnitType } from "@shared/schema";
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
@@ -516,7 +535,7 @@ export class DatabaseStorage implements IStorage {
     if (initialQuantity > 0) {
       await this.createTransaction({
         itemId: item.id,
-        type: TransactionType.IN,
+        type: "in",
         quantity: initialQuantity,
         project: "초기 등록",
         note: "자재 최초 등록"
@@ -602,7 +621,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     // 재고 수량 업데이트
-    const newQuantity = insertTransaction.type === TransactionType.IN
+    const newQuantity = insertTransaction.type === "in"
       ? item.currentQuantity + insertTransaction.quantity
       : item.currentQuantity - insertTransaction.quantity;
     
@@ -610,6 +629,266 @@ export class DatabaseStorage implements IStorage {
     await this.updateInventoryItem(item.id, { currentQuantity: newQuantity });
     
     return transaction;
+  }
+
+  // 구매 주문 메서드
+  async getAllPurchaseOrders(): Promise<PurchaseOrder[]> {
+    return await db
+      .select()
+      .from(purchaseOrders)
+      .orderBy(desc(purchaseOrders.createdAt));
+  }
+
+  async getPurchaseOrderById(id: number): Promise<PurchaseOrder | undefined> {
+    const [purchaseOrder] = await db
+      .select()
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.id, id));
+    return purchaseOrder || undefined;
+  }
+
+  async getPurchaseOrderByOrderNumber(orderNumber: string): Promise<PurchaseOrder | undefined> {
+    const [purchaseOrder] = await db
+      .select()
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.orderNumber, orderNumber));
+    return purchaseOrder || undefined;
+  }
+
+  async getPurchaseOrdersByStatus(status: PurchaseOrderStatus): Promise<PurchaseOrder[]> {
+    return await db
+      .select()
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.status, status))
+      .orderBy(desc(purchaseOrders.createdAt));
+  }
+
+  private async generateOrderNumber(): Promise<string> {
+    // 현재 연도와 월
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    
+    // 현재 월의 최신 주문번호 찾기
+    const prefix = `PO-${year}${month}-`;
+    
+    const query = sql`
+      SELECT order_number FROM ${purchaseOrders}
+      WHERE order_number LIKE ${prefix + '%'}
+      ORDER BY order_number DESC
+      LIMIT 1
+    `;
+    
+    const result = await db.execute(query);
+    const rows = result.rows;
+    
+    let nextNumber = 1;
+    if (rows.length > 0) {
+      const lastOrderNumber = rows[0].order_number as string;
+      const lastNumber = parseInt(lastOrderNumber.split('-')[2]);
+      if (!isNaN(lastNumber)) {
+        nextNumber = lastNumber + 1;
+      }
+    }
+    
+    // 주문번호 형식: PO-YYYYMM-0001 (PO-연월-일련번호)
+    return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+  }
+
+  async createPurchaseOrder(insertPurchaseOrder: InsertPurchaseOrder): Promise<PurchaseOrder> {
+    // 주문번호 생성
+    const orderNumber = await this.generateOrderNumber();
+    
+    // 현재 날짜
+    const now = new Date();
+    
+    // 기본값 설정
+    const purchaseOrderToInsert = {
+      orderNumber,
+      status: insertPurchaseOrder.status || "draft",
+      vendorName: insertPurchaseOrder.vendorName,
+      vendorContact: insertPurchaseOrder.vendorContact || null,
+      expectedDeliveryDate: insertPurchaseOrder.expectedDeliveryDate || null,
+      notes: insertPurchaseOrder.notes || null,
+      totalAmount: '0', // 초기 총액은 0으로 설정
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    // 주문서 생성
+    const [purchaseOrder] = await db
+      .insert(purchaseOrders)
+      .values(purchaseOrderToInsert)
+      .returning();
+    
+    return purchaseOrder;
+  }
+
+  async updatePurchaseOrder(id: number, data: Partial<InsertPurchaseOrder>): Promise<PurchaseOrder | undefined> {
+    // 현재 날짜
+    const now = new Date();
+    
+    // 업데이트 데이터 준비
+    const updateData: any = {
+      updatedAt: now
+    };
+    
+    // 각 필드에 대해 타입 호환성 확보
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.vendorName !== undefined) updateData.vendorName = data.vendorName;
+    if (data.vendorContact !== undefined) updateData.vendorContact = data.vendorContact || null;
+    if (data.expectedDeliveryDate !== undefined) updateData.expectedDeliveryDate = data.expectedDeliveryDate || null;
+    if (data.notes !== undefined) updateData.notes = data.notes || null;
+    
+    // 주문서 업데이트
+    const [updatedPurchaseOrder] = await db
+      .update(purchaseOrders)
+      .set(updateData)
+      .where(eq(purchaseOrders.id, id))
+      .returning();
+    
+    return updatedPurchaseOrder || undefined;
+  }
+
+  async deletePurchaseOrder(id: number): Promise<boolean> {
+    // 관련 주문 항목 삭제
+    await db
+      .delete(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.purchaseOrderId, id));
+    
+    // 주문서 삭제
+    const result = await db
+      .delete(purchaseOrders)
+      .where(eq(purchaseOrders.id, id))
+      .returning({ id: purchaseOrders.id });
+    
+    return result.length > 0;
+  }
+
+  // 구매 주문 항목 메서드
+  async getPurchaseOrderItems(purchaseOrderId: number): Promise<PurchaseOrderItem[]> {
+    return await db
+      .select()
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.purchaseOrderId, purchaseOrderId));
+  }
+
+  async createPurchaseOrderItem(insertItem: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
+    // 재고 항목 정보 가져오기
+    const item = await this.getInventoryItemById(insertItem.itemId);
+    if (!item) {
+      throw new Error("Item not found");
+    }
+    
+    // 단가 추출 (없으면 아이템의 기본 단가 사용)
+    const unitPrice = insertItem.unitPrice || item.unitPrice;
+    
+    // 금액 계산
+    const quantity = insertItem.quantity || 0;
+    const amount = unitPrice ? Number(unitPrice) * quantity : 0;
+    
+    // 주문 항목 생성
+    const orderItemToInsert = {
+      purchaseOrderId: insertItem.purchaseOrderId,
+      itemId: insertItem.itemId,
+      quantity: quantity,
+      unitPrice: unitPrice ? String(unitPrice) : null,
+      amount: String(amount),
+      notes: insertItem.notes || null
+    };
+    
+    const [purchaseOrderItem] = await db
+      .insert(purchaseOrderItems)
+      .values(orderItemToInsert)
+      .returning();
+    
+    // 주문서의 총액 업데이트
+    await this.updatePurchaseOrderTotal(insertItem.purchaseOrderId);
+    
+    return purchaseOrderItem;
+  }
+
+  async updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem | undefined> {
+    // 현재 주문 항목 가져오기
+    const [currentItem] = await db
+      .select()
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, id));
+    
+    if (!currentItem) {
+      return undefined;
+    }
+    
+    // 업데이트할 데이터 준비
+    const updateData: any = {};
+    
+    if (data.quantity !== undefined) updateData.quantity = data.quantity;
+    if (data.unitPrice !== undefined) updateData.unitPrice = data.unitPrice ? String(data.unitPrice) : null;
+    if (data.notes !== undefined) updateData.notes = data.notes || null;
+    
+    // 수량이나 단가가 변경되면 금액 다시 계산
+    if (data.quantity !== undefined || data.unitPrice !== undefined) {
+      const quantity = data.quantity !== undefined ? data.quantity : currentItem.quantity;
+      const unitPrice = data.unitPrice !== undefined 
+        ? (data.unitPrice ? String(data.unitPrice) : null) 
+        : currentItem.unitPrice;
+      
+      if (unitPrice) {
+        updateData.amount = String(Number(unitPrice) * quantity);
+      }
+    }
+    
+    // 주문 항목 업데이트
+    const [updatedItem] = await db
+      .update(purchaseOrderItems)
+      .set(updateData)
+      .where(eq(purchaseOrderItems.id, id))
+      .returning();
+    
+    // 주문서의 총액 업데이트
+    await this.updatePurchaseOrderTotal(currentItem.purchaseOrderId);
+    
+    return updatedItem || undefined;
+  }
+
+  async deletePurchaseOrderItem(id: number): Promise<boolean> {
+    // 주문 항목의 purchaseOrderId 가져오기
+    const [item] = await db
+      .select({ purchaseOrderId: purchaseOrderItems.purchaseOrderId })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, id));
+    
+    if (!item) {
+      return false;
+    }
+    
+    // 주문 항목 삭제
+    const result = await db
+      .delete(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, id))
+      .returning({ id: purchaseOrderItems.id });
+    
+    // 주문서의 총액 업데이트
+    await this.updatePurchaseOrderTotal(item.purchaseOrderId);
+    
+    return result.length > 0;
+  }
+
+  // 주문서 총액 업데이트 헬퍼 메서드
+  private async updatePurchaseOrderTotal(purchaseOrderId: number): Promise<void> {
+    // 모든 주문 항목의 금액 합계 계산
+    const totalResult = await db
+      .select({ total: sql`sum(amount)` })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.purchaseOrderId, purchaseOrderId));
+    
+    const totalAmount = Number(totalResult[0].total) || 0;
+    
+    // 주문서 총액 업데이트
+    await db
+      .update(purchaseOrders)
+      .set({ totalAmount: String(totalAmount) })
+      .where(eq(purchaseOrders.id, purchaseOrderId));
   }
 
   async getDashboardStats(): Promise<{
@@ -641,7 +920,7 @@ export class DatabaseStorage implements IStorage {
       .from(transactions)
       .where(
         and(
-          eq(transactions.type, TransactionType.IN),
+          eq(transactions.type, "in"),
           gte(transactions.createdAt, startOfMonth),
           lte(transactions.createdAt, endOfMonth)
         )
@@ -654,7 +933,7 @@ export class DatabaseStorage implements IStorage {
       .from(transactions)
       .where(
         and(
-          eq(transactions.type, TransactionType.OUT),
+          eq(transactions.type, "out"),
           gte(transactions.createdAt, startOfMonth),
           lte(transactions.createdAt, endOfMonth)
         )

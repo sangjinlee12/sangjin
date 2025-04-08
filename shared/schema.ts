@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, boolean, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -110,3 +110,53 @@ export const UnitType = {
 } as const;
 
 export type UnitType = typeof UnitType[keyof typeof UnitType];
+
+// 구매 주문서 상태 정의
+export const PurchaseOrderStatus = {
+  DRAFT: "draft",       // 작성 중
+  PENDING: "pending",   // 승인 대기 중
+  APPROVED: "approved", // 승인됨
+  ORDERED: "ordered",   // 주문됨
+  RECEIVED: "received", // 수령됨
+  CANCELED: "canceled", // 취소됨
+} as const;
+
+export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof PurchaseOrderStatus];
+
+// 구매 주문서 스키마
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: text("order_number").notNull().unique(),
+  status: text("status").notNull().default(PurchaseOrderStatus.DRAFT),
+  vendorName: text("vendor_name").notNull(),
+  vendorContact: text("vendor_contact"),
+  expectedDeliveryDate: timestamp("expected_delivery_date"),
+  notes: text("notes"),
+  totalAmount: numeric("total_amount", { precision: 15, scale: 2 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders)
+  .omit({ id: true, orderNumber: true, createdAt: true, updatedAt: true, totalAmount: true });
+
+// 구매 주문 항목 스키마
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id: serial("id").primaryKey(),
+  purchaseOrderId: integer("purchase_order_id").notNull(),
+  itemId: integer("item_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
+  amount: numeric("amount", { precision: 15, scale: 2 }),
+  notes: text("notes"),
+});
+
+export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderItems)
+  .omit({ id: true, amount: true });
+
+// 타입 정의
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
+
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
