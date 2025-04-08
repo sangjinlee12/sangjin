@@ -40,6 +40,12 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-gray-100">
           {children}
         </main>
+        
+        <footer className="py-4 px-6 border-t border-gray-200 bg-white">
+          <div className="text-center text-gray-600 text-sm">
+            <p>&copy; 2025 주식회사 에스에스전력. All rights reserved.</p>
+          </div>
+        </footer>
       </div>
     </div>
   );
