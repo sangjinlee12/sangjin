@@ -30,8 +30,8 @@ export default function Inventory() {
   const [isNewItemModalOpen, setIsNewItemModalOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("");
-  const [stockFilter, setStockFilter] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [stockFilter, setStockFilter] = useState<string>("all");
 
   // Get URL params for filters
   useEffect(() => {
@@ -67,15 +67,17 @@ export default function Inventory() {
         (item.specification && item.specification.toLowerCase().includes(searchQuery.toLowerCase()))
       : true;
     
-    const matchesCategory = categoryFilter 
-      ? getCategoryName(item.categoryId) === categoryFilter
-      : true;
+    const matchesCategory = categoryFilter === 'all'
+      ? true
+      : getCategoryName(item.categoryId) === categoryFilter;
     
-    const matchesStock = stockFilter === 'low'
-      ? item.currentQuantity < item.minimumQuantity
-      : stockFilter === 'normal'
-        ? item.currentQuantity >= item.minimumQuantity
-        : true;
+    const matchesStock = stockFilter === 'all'
+      ? true
+      : stockFilter === 'low'
+        ? item.currentQuantity < item.minimumQuantity
+        : stockFilter === 'normal'
+          ? item.currentQuantity >= item.minimumQuantity
+          : true;
     
     return matchesSearch && matchesCategory && matchesStock;
   });
@@ -112,8 +114,8 @@ export default function Inventory() {
   
   const clearFilters = () => {
     setSearchQuery("");
-    setCategoryFilter("");
-    setStockFilter("");
+    setCategoryFilter("all");
+    setStockFilter("all");
     setLocation("/inventory");
   };
 
@@ -155,7 +157,7 @@ export default function Inventory() {
                   <SelectValue placeholder="모든 카테고리" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">모든 카테고리</SelectItem>
+                  <SelectItem value="all">모든 카테고리</SelectItem>
                   {categories.map((category) => (
                     <SelectItem key={category.id} value={category.name}>
                       {category.name}
@@ -177,7 +179,7 @@ export default function Inventory() {
                   <SelectValue placeholder="모든 상태" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">모든 상태</SelectItem>
+                  <SelectItem value="all">모든 상태</SelectItem>
                   <SelectItem value="low">부족 재고</SelectItem>
                   <SelectItem value="normal">정상 재고</SelectItem>
                 </SelectContent>

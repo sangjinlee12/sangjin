@@ -75,14 +75,14 @@ export const TransactionHistoryTable = ({
       : true;
 
     // Apply category filter
-    const matchesCategory = categoryFilter
-      ? item.categoryId.toString() === categoryFilter
-      : true;
+    const matchesCategory = categoryFilter === 'all'
+      ? true
+      : item.categoryId.toString() === categoryFilter;
 
     // Apply type filter
-    const matchesType = typeFilter
-      ? transaction.type === typeFilter
-      : true;
+    const matchesType = typeFilter === 'all'
+      ? true
+      : transaction.type === typeFilter;
 
     // Apply date filters
     const transactionDate = new Date(transaction.createdAt);

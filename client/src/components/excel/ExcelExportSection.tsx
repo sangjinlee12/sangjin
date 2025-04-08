@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export const ExcelExportSection = () => {
   const { toast } = useToast();
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [includeTransactions, setIncludeTransactions] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   
@@ -114,7 +114,7 @@ export const ExcelExportSection = () => {
                 <SelectValue placeholder="모든 카테고리" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">모든 카테고리</SelectItem>
+                <SelectItem value="all">모든 카테고리</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id.toString()}>
                     {category.name}

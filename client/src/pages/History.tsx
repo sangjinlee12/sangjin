@@ -30,8 +30,8 @@ import { apiRequest } from "@/lib/queryClient";
 
 export default function History() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   
@@ -50,8 +50,8 @@ export default function History() {
       // Build query params
       const params = new URLSearchParams();
       if (searchQuery) params.append('search', searchQuery);
-      if (categoryFilter) params.append('category', categoryFilter);
-      if (typeFilter) params.append('type', typeFilter);
+      if (categoryFilter && categoryFilter !== 'all') params.append('category', categoryFilter);
+      if (typeFilter && typeFilter !== 'all') params.append('type', typeFilter);
       if (startDate) params.append('start', formatDate(startDate));
       if (endDate) params.append('end', formatDate(endDate));
       
@@ -64,8 +64,8 @@ export default function History() {
 
   const clearFilters = () => {
     setSearchQuery("");
-    setCategoryFilter("");
-    setTypeFilter("");
+    setCategoryFilter("all");
+    setTypeFilter("all");
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -108,7 +108,7 @@ export default function History() {
                   <SelectValue placeholder="모든 카테고리" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">모든 카테고리</SelectItem>
+                  <SelectItem value="all">모든 카테고리</SelectItem>
                   {categories.map((category) => (
                     <SelectItem key={category.id} value={category.id.toString()}>
                       {category.name}
@@ -130,7 +130,7 @@ export default function History() {
                   <SelectValue placeholder="모든 유형" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">모든 유형</SelectItem>
+                  <SelectItem value="all">모든 유형</SelectItem>
                   <SelectItem value="in">입고</SelectItem>
                   <SelectItem value="out">출고</SelectItem>
                 </SelectContent>

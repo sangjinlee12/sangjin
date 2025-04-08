@@ -90,7 +90,7 @@ export const InventoryTable = ({
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
               >
-                <option value="">모든 카테고리</option>
+                <option value="all">모든 카테고리</option>
                 {categories.map(category => (
                   <option key={category.id} value={category.name}>
                     {category.name}

@@ -22,7 +22,7 @@ export const exportInventoryToExcel = async (
     // Filter items if options provided
     let filteredItems = [...items];
     
-    if (options.categoryFilter) {
+    if (options.categoryFilter && options.categoryFilter !== 'all') {
       filteredItems = filteredItems.filter(item => 
         item.categoryId.toString() === options.categoryFilter
       );
@@ -125,7 +125,7 @@ export const exportTransactionHistoryToExcel = async (
       );
     }
     
-    if (options.categoryFilter) {
+    if (options.categoryFilter && options.categoryFilter !== 'all') {
       filteredTransactions = filteredTransactions.filter(transaction => {
         const item = itemMap.get(transaction.itemId);
         return item && item.categoryId.toString() === options.categoryFilter;
