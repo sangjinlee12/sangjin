@@ -354,4 +354,307 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// 데이터베이스 스토리지 구현
+import { db } from "./db";
+import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
+
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async getAllCategories(): Promise<Category[]> {
+    return await db.select().from(categories);
+  }
+
+  async getCategoryById(id: number): Promise<Category | undefined> {
+    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    return category || undefined;
+  }
+
+  async getCategoryByName(name: string): Promise<Category | undefined> {
+    const [category] = await db.select().from(categories).where(eq(categories.name, name));
+    return category || undefined;
+  }
+
+  async createCategory(insertCategory: InsertCategory): Promise<Category> {
+    const [category] = await db
+      .insert(categories)
+      .values(insertCategory)
+      .returning();
+    return category;
+  }
+
+  async updateCategory(id: number, data: Partial<InsertCategory>): Promise<Category | undefined> {
+    const [updatedCategory] = await db
+      .update(categories)
+      .set(data)
+      .where(eq(categories.id, id))
+      .returning();
+    return updatedCategory || undefined;
+  }
+
+  async deleteCategory(id: number): Promise<boolean> {
+    const result = await db
+      .delete(categories)
+      .where(eq(categories.id, id))
+      .returning({ id: categories.id });
+    return result.length > 0;
+  }
+
+  async getAllInventoryItems(): Promise<InventoryItem[]> {
+    return await db.select().from(inventoryItems);
+  }
+
+  async getInventoryItemById(id: number): Promise<InventoryItem | undefined> {
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, id));
+    return item || undefined;
+  }
+
+  async getInventoryItemByCode(code: string): Promise<InventoryItem | undefined> {
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.code, code));
+    return item || undefined;
+  }
+
+  async getInventoryItemsByCategory(categoryId: number): Promise<InventoryItem[]> {
+    return await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.categoryId, categoryId));
+  }
+
+  async getLowStockItems(): Promise<InventoryItem[]> {
+    return await db
+      .select()
+      .from(inventoryItems)
+      .where(sql`${inventoryItems.currentQuantity} < ${inventoryItems.minimumQuantity}`);
+  }
+
+  private async generateItemCode(categoryPrefix: string): Promise<string> {
+    // 현재 연도
+    const currentYear = new Date().getFullYear();
+    
+    // 현재 카테고리의 최신 코드 찾기
+    const query = sql`
+      SELECT code FROM ${inventoryItems}
+      WHERE code LIKE ${categoryPrefix + '-' + currentYear + '-%'}
+      ORDER BY code DESC
+      LIMIT 1
+    `;
+    
+    const result = await db.execute(query);
+    const rows = result.rows;
+    
+    let nextNumber = 1;
+    if (rows.length > 0) {
+      const lastCode = rows[0].code as string;
+      const lastNumber = parseInt(lastCode.split('-')[2]);
+      if (!isNaN(lastNumber)) {
+        nextNumber = lastNumber + 1;
+      }
+    }
+    
+    // 상품 코드 형식: C-2023-0001 (카테고리 첫 글자-연도-일련번호)
+    return `${categoryPrefix}-${currentYear}-${nextNumber.toString().padStart(4, '0')}`;
+  }
+
+  async createInventoryItem(insertItem: InsertInventoryItem): Promise<InventoryItem> {
+    // 카테고리 정보 가져오기
+    const category = await this.getCategoryById(insertItem.categoryId);
+    if (!category) {
+      throw new Error("Category not found");
+    }
+    
+    // 카테고리 이름의 첫 글자를 가져와 코드 접두사로 사용
+    const categoryPrefix = category.name.charAt(0).toUpperCase();
+    
+    // 자재 코드 생성
+    const code = await this.generateItemCode(categoryPrefix);
+    
+    // 현재 날짜
+    const now = new Date();
+    
+    // Drizzle ORM을 사용해 데이터베이스에 삽입
+    const [item] = await db
+      .insert(inventoryItems)
+      .values({
+        ...insertItem,
+        code,
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    
+    // 초기 재고 트랜잭션 생성 (초기 수량이 0보다 크면)
+    if (insertItem.currentQuantity > 0) {
+      await this.createTransaction({
+        itemId: item.id,
+        type: TransactionType.IN,
+        quantity: insertItem.currentQuantity,
+        project: "초기 등록",
+        note: "자재 최초 등록"
+      });
+    }
+    
+    return item;
+  }
+
+  async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem | undefined> {
+    // 업데이트할 때 updatedAt 필드를 현재 시간으로 설정
+    const now = new Date();
+    
+    const [updatedItem] = await db
+      .update(inventoryItems)
+      .set({
+        ...data,
+        updatedAt: now
+      })
+      .where(eq(inventoryItems.id, id))
+      .returning();
+    
+    return updatedItem || undefined;
+  }
+
+  async deleteInventoryItem(id: number): Promise<boolean> {
+    const result = await db
+      .delete(inventoryItems)
+      .where(eq(inventoryItems.id, id))
+      .returning({ id: inventoryItems.id });
+    
+    return result.length > 0;
+  }
+
+  async getAllTransactions(): Promise<Transaction[]> {
+    return await db
+      .select()
+      .from(transactions)
+      .orderBy(desc(transactions.createdAt));
+  }
+
+  async getTransactionsByItemId(itemId: number): Promise<Transaction[]> {
+    return await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.itemId, itemId))
+      .orderBy(desc(transactions.createdAt));
+  }
+
+  async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
+    // 트랜잭션 생성
+    const [transaction] = await db
+      .insert(transactions)
+      .values(insertTransaction)
+      .returning();
+    
+    // 재고 아이템 가져오기
+    const item = await this.getInventoryItemById(insertTransaction.itemId);
+    if (!item) {
+      throw new Error("Item not found");
+    }
+    
+    // 재고 수량 업데이트
+    const newQuantity = insertTransaction.type === TransactionType.IN
+      ? item.currentQuantity + insertTransaction.quantity
+      : item.currentQuantity - insertTransaction.quantity;
+    
+    // 재고 아이템 업데이트
+    await this.updateInventoryItem(item.id, { currentQuantity: newQuantity });
+    
+    return transaction;
+  }
+
+  async getDashboardStats(): Promise<{
+    totalItems: number;
+    lowStockItems: number;
+    monthlyInflow: number;
+    monthlyOutflow: number;
+    categoryDistribution: {category: string, count: number}[];
+  }> {
+    // 총 자재 수
+    const totalItemsResult = await db.select({ count: sql`count(*)` }).from(inventoryItems);
+    const totalItems = Number(totalItemsResult[0].count);
+    
+    // 부족 재고 수
+    const lowStockItemsResult = await db
+      .select({ count: sql`count(*)` })
+      .from(inventoryItems)
+      .where(sql`${inventoryItems.currentQuantity} < ${inventoryItems.minimumQuantity}`);
+    const lowStockItems = Number(lowStockItemsResult[0].count);
+    
+    // 이번 달 시작일과 끝일
+    const today = new Date();
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    // 이번 달 입고량
+    const monthlyInflowResult = await db
+      .select({ sum: sql`sum(quantity)` })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.type, TransactionType.IN),
+          gte(transactions.createdAt, startOfMonth),
+          lte(transactions.createdAt, endOfMonth)
+        )
+      );
+    const monthlyInflow = Number(monthlyInflowResult[0].sum) || 0;
+    
+    // 이번 달 출고량
+    const monthlyOutflowResult = await db
+      .select({ sum: sql`sum(quantity)` })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.type, TransactionType.OUT),
+          gte(transactions.createdAt, startOfMonth),
+          lte(transactions.createdAt, endOfMonth)
+        )
+      );
+    const monthlyOutflow = Number(monthlyOutflowResult[0].sum) || 0;
+    
+    // 카테고리 분포
+    const categoryDistributionResult = await db
+      .select({
+        categoryId: inventoryItems.categoryId,
+        count: sql`count(*)`
+      })
+      .from(inventoryItems)
+      .groupBy(inventoryItems.categoryId);
+    
+    // 카테고리 이름 가져오기
+    const categoryDistribution = await Promise.all(
+      categoryDistributionResult.map(async (row) => {
+        const category = await this.getCategoryById(Number(row.categoryId));
+        return {
+          category: category ? category.name : "Unknown",
+          count: Number(row.count)
+        };
+      })
+    );
+    
+    return {
+      totalItems,
+      lowStockItems,
+      monthlyInflow,
+      monthlyOutflow,
+      categoryDistribution
+    };
+  }
+}
+
+// 데이터베이스 스토리지 사용
+export const storage = new DatabaseStorage();
