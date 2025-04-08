@@ -48,8 +48,14 @@ export const inventoryItems = pgTable("inventory_items", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
+// 기본 스키마 생성 후 unitPrice 필드에 대한 명시적 타입 처리
+const baseSchema = createInsertSchema(inventoryItems)
   .omit({ id: true, code: true, createdAt: true, updatedAt: true });
+
+// unitPrice 필드가 문자열이나 숫자 모두 허용하도록 수정된 스키마
+export const insertInventoryItemSchema = baseSchema.extend({
+  unitPrice: z.union([z.number(), z.string(), z.null()]).optional()
+});
 
 // Transaction schema
 export const transactions = pgTable("transactions", {

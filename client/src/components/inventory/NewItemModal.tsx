@@ -165,8 +165,8 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
       // null, 빈 문자열, undefined를 모두 적절하게 처리
       specification: data.specification || undefined,
       location: data.location || undefined,
-      // unitPrice는 숫자 타입으로 변환하거나 undefined로 설정
-      unitPrice: typeof data.unitPrice === 'number' ? data.unitPrice : undefined,
+      // unitPrice - 값이 있으면 그대로 전달, 비어있으면 undefined
+      unitPrice: data.unitPrice !== null && data.unitPrice !== undefined ? data.unitPrice : undefined,
       notes: data.notes || undefined,
     };
 

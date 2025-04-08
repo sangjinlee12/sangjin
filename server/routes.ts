@@ -308,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentQuantity: Number(row.currentQuantity),
             minimumQuantity: Number(row.minimumQuantity),
             location: row.location ? String(row.location) : undefined,
-            unitPrice: row.unitPrice ? Number(row.unitPrice) : undefined,
+            unitPrice: row.unitPrice !== undefined ? row.unitPrice : undefined, // 타입 변환 없이 그대로 전달
             notes: row.notes ? String(row.notes) : undefined
           };
 
