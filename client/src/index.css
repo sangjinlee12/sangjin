@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    background-color: #F4F4F4;
+  }
+}
+
+/* Google Material Icons */
+@import url("https://fonts.googleapis.com/icon?family=Material+Icons");
+
+/* IBM Plex Sans font */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+@layer base {
+  :root {
+    --background: 0 0% 96%;
+    --foreground: 0 0% 22%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 22%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 22%;
+    
+    --primary: 216 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 220 13% 22%;
+    --secondary-foreground: 0 0% 100%;
+    
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 55%;
+    
+    --accent: 216 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 48%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 216 100% 50%;
+    
+    --radius: 0.5rem;
+    
+    --chart-1: 216 100% 50%;
+    --chart-2: 142 57% 42%;
+    --chart-3: 277 59% 62%;
+    --chart-4: 27 93% 58%;
+    --chart-5: 204 100% 63%;
+    
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 22%;
+    --sidebar-primary: 216 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 216 100% 50%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 88%;
+    --sidebar-ring: 216 100% 50%;
+  }
+}
+
+/* Custom styling for active sidebar items */
+.sidebar-item.active {
+  border-left: 4px solid hsl(var(--primary));
+  background-color: rgba(0, 98, 255, 0.1);
+}
+
+.material-icons {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+
+body, button, input, select, textarea {
+  font-family: 'IBM Plex Sans', sans-serif;
+}
