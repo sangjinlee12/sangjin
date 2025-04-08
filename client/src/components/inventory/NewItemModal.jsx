@@ -28,15 +28,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { insertInventoryItemSchema, InventoryItem, Category } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { UnitType } from "../../lib/unitTypes.js";
 
 // Create a form schema based on the inventory item schema
 const formSchema = z.object({
   name: z.string().min(1, "자재명은 필수 입력 항목입니다."),
   categoryId: z.coerce.number().min(1, "카테고리를 선택해주세요."),
   specification: z.string().optional().nullable(),
+  unitType: z.string().optional().nullable(), // 자재 단위 타입 (M, EA, 식, 조)
   currentQuantity: z.coerce.number().min(0, "수량은 0 이상이어야 합니다."),
   minimumQuantity: z.coerce.number().min(0, "최소 수량은 0 이상이어야 합니다."),
   location: z.string().optional().nullable(),
@@ -44,32 +45,25 @@ const formSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-type FormValues = z.infer<typeof formSchema>;
-
-type NewItemModalProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  itemToEdit: InventoryItem | null;
-};
-
-export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps) => {
+const NewItemModal = ({ isOpen, onClose, itemToEdit }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditMode = !!itemToEdit;
   
   // Fetch categories
-  const { data: categories = [] } = useQuery<Category[]>({
+  const { data: categories = [] } = useQuery({
     queryKey: ['/api/categories'],
     enabled: isOpen
   });
 
   // Create form with react-hook-form
-  const form = useForm<FormValues>({
+  const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       categoryId: categories && categories.length > 0 ? categories[0].id : 1,
       specification: "",
+      unitType: UnitType.M, // 기본값을 M(미터)로 설정
       currentQuantity: 0,
       minimumQuantity: 0,
       location: "",
@@ -88,6 +82,7 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
         name: itemToEdit.name,
         categoryId: itemToEdit.categoryId,
         specification: itemToEdit.specification || "",
+        unitType: itemToEdit.unitType || UnitType.M,
         currentQuantity: itemToEdit.currentQuantity,
         minimumQuantity: itemToEdit.minimumQuantity,
         location: itemToEdit.location || "",
@@ -100,6 +95,7 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
         name: "",
         categoryId: categories[0].id,
         specification: "",
+        unitType: UnitType.M,
         currentQuantity: 0,
         minimumQuantity: 0,
         location: "",
@@ -111,7 +107,7 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
 
   // Create mutation
   const createItemMutation = useMutation({
-    mutationFn: async (data: FormValues) => {
+    mutationFn: async (data) => {
       return apiRequest('POST', '/api/items', data);
     },
     onSuccess: () => {
@@ -134,7 +130,7 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
 
   // Update mutation
   const updateItemMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: FormValues }) => {
+    mutationFn: async ({ id, data }) => {
       return apiRequest('PUT', `/api/items/${id}`, data);
     },
     onSuccess: () => {
@@ -158,12 +154,13 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
     }
   });
 
-  const onSubmit = (data: FormValues) => {
+  const onSubmit = (data) => {
     // 데이터 전처리
     const processedData = {
       ...data,
       // null, 빈 문자열, undefined를 모두 적절하게 처리
       specification: data.specification || undefined,
+      unitType: data.unitType || undefined,
       location: data.location || undefined,
       // unitPrice - 값이 있으면 그대로 전달, 비어있으면 undefined
       unitPrice: data.unitPrice !== null && data.unitPrice !== undefined ? data.unitPrice : undefined,
@@ -264,6 +261,35 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
                           value={field.value || ""}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <div>
+                <FormField
+                  control={form.control}
+                  name="unitType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>단위</FormLabel>
+                      <Select
+                        value={field.value || UnitType.M}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="단위 선택" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={UnitType.M}>미터(M)</SelectItem>
+                          <SelectItem value={UnitType.EA}>개수(EA)</SelectItem>
+                          <SelectItem value={UnitType.SET}>한 세트(식)</SelectItem>
+                          <SelectItem value={UnitType.GROUP}>한 그룹(조)</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}

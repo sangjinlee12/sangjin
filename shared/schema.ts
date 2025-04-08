@@ -39,6 +39,7 @@ export const inventoryItems = pgTable("inventory_items", {
   name: text("name").notNull(),
   categoryId: integer("category_id").notNull(),
   specification: text("specification"),
+  unitType: text("unit_type"), // 자재 형식: M, EA, 식, 조 등
   currentQuantity: integer("current_quantity").notNull().default(0),
   minimumQuantity: integer("minimum_quantity").notNull().default(0),
   location: text("location"),
@@ -99,3 +100,13 @@ export const TransactionType = {
 } as const;
 
 export type TransactionType = typeof TransactionType[keyof typeof TransactionType];
+
+// 자재 단위 타입 정의
+export const UnitType = {
+  M: "M",      // 미터
+  EA: "EA",    // 개수(Each)
+  SET: "식",    // 한 세트
+  GROUP: "조", // 한 그룹
+} as const;
+
+export type UnitType = typeof UnitType[keyof typeof UnitType];

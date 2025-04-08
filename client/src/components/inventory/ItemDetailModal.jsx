@@ -8,18 +8,11 @@ import {
   DialogFooter 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { InventoryItem, Transaction, Category } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { UnitType } from "../../lib/unitTypes.js";
 
-type ItemDetailModalProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  itemId: number | null;
-  onEdit: (item: InventoryItem) => void;
-};
-
-export const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }: ItemDetailModalProps) => {
+const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -28,7 +21,7 @@ export const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }: ItemDetailM
     data: item,
     isLoading: isLoadingItem,
     isError: isItemError
-  } = useQuery<InventoryItem>({
+  } = useQuery({
     queryKey: ['/api/items', itemId],
     enabled: isOpen && itemId !== null
   });
@@ -37,20 +30,20 @@ export const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }: ItemDetailM
   const {
     data: transactions = [],
     isLoading: isLoadingTransactions
-  } = useQuery<Transaction[]>({
+  } = useQuery({
     queryKey: ['/api/transactions/item', itemId],
     enabled: isOpen && itemId !== null
   });
 
   // Fetch all categories
-  const { data: categories = [] } = useQuery<Category[]>({
+  const { data: categories = [] } = useQuery({
     queryKey: ['/api/categories'],
     enabled: isOpen
   });
 
   // Delete mutation
   const deleteItemMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (id) => {
       return apiRequest('DELETE', `/api/items/${id}`);
     },
     onSuccess: () => {
@@ -72,13 +65,13 @@ export const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }: ItemDetailM
   });
 
   // Get category name by id
-  const getCategoryName = (categoryId: number): string => {
+  const getCategoryName = (categoryId) => {
     const category = categories.find(c => c.id === categoryId);
     return category ? category.name : "Unknown";
   };
 
   // Format date for display - 더 안전한 날짜 처리 방식 적용
-  const formatDate = (dateString: Date): string => {
+  const formatDate = (dateString) => {
     try {
       const date = new Date(dateString);
       // 유효한 날짜인지 확인
@@ -141,14 +134,20 @@ export const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }: ItemDetailM
                     <p>{item.specification || '-'}</p>
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">단위</label>
+                    <p className="px-2 py-1 text-xs inline-block rounded-full bg-gray-100 text-gray-800">
+                      {item.unitType || UnitType.M}
+                    </p>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">현재 수량</label>
                     <p className={item.currentQuantity < item.minimumQuantity ? "text-red-600 font-medium" : "text-green-600 font-medium"}>
-                      {item.currentQuantity} 개
+                      {item.currentQuantity} {item.unitType === UnitType.M ? 'M' : item.unitType === UnitType.EA ? '개' : item.unitType || '개'}
                     </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">최소 수량</label>
-                    <p>{item.minimumQuantity} 개</p>
+                    <p>{item.minimumQuantity} {item.unitType === UnitType.M ? 'M' : item.unitType === UnitType.EA ? '개' : item.unitType || '개'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">위치</label>
@@ -195,7 +194,7 @@ export const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }: ItemDetailM
                               </span>
                               <div>
                                 <p className="text-sm font-medium">
-                                  {transaction.type === 'in' ? '입고' : '출고'}: {transaction.quantity}개
+                                  {transaction.type === 'in' ? '입고' : '출고'}: {transaction.quantity} {item.unitType === UnitType.M ? 'M' : item.unitType === UnitType.EA ? '개' : item.unitType || '개'}
                                 </p>
                                 <p className="text-xs text-gray-500">{formatDate(transaction.createdAt)}</p>
                               </div>

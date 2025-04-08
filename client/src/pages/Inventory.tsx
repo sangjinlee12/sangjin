@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/select";
 import { InventoryItem, Category } from "@shared/schema";
 import InventoryTable from "@/components/dashboard/InventoryTable";
-import ItemDetailModal from "@/components/inventory/ItemDetailModal";
-import NewItemModal from "@/components/inventory/NewItemModal";
+import ItemDetailModal from "@/components/inventory/ItemDetailModal.jsx";
+import NewItemModal from "@/components/inventory/NewItemModal.jsx";
 
 export default function Inventory() {
   const [location, setLocation] = useLocation();

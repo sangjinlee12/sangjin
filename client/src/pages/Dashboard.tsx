@@ -4,8 +4,8 @@ import StatCard from "@/components/dashboard/StatCard";
 import CategoryDistribution from "@/components/dashboard/CategoryDistribution";
 import LowStockAlert from "@/components/dashboard/LowStockAlert";
 import InventoryTable from "@/components/dashboard/InventoryTable";
-import ItemDetailModal from "@/components/inventory/ItemDetailModal";
-import NewItemModal from "@/components/inventory/NewItemModal";
+import ItemDetailModal from "@/components/inventory/ItemDetailModal.jsx";
+import NewItemModal from "@/components/inventory/NewItemModal.jsx";
 import { InventoryItem } from "@shared/schema";
 
 export default function Dashboard() {
