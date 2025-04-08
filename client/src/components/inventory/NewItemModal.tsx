@@ -159,12 +159,14 @@ export const NewItemModal = ({ isOpen, onClose, itemToEdit }: NewItemModalProps)
   });
 
   const onSubmit = (data: FormValues) => {
-    // 빈 문자열 또는 null을 undefined로 처리
+    // 데이터 전처리
     const processedData = {
       ...data,
+      // null, 빈 문자열, undefined를 모두 적절하게 처리
       specification: data.specification || undefined,
       location: data.location || undefined,
-      unitPrice: data.unitPrice || undefined,
+      // unitPrice는 숫자 타입으로 변환하거나 undefined로 설정
+      unitPrice: typeof data.unitPrice === 'number' ? data.unitPrice : undefined,
       notes: data.notes || undefined,
     };
 

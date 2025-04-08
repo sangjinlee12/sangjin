@@ -151,13 +151,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/items", async (req: Request, res: Response) => {
     try {
-      const validatedData = insertInventoryItemSchema.parse(req.body);
+      // unitPrice가 숫자 형태가 아니라면 삭제하여 스키마에서 처리하도록 함
+      const data = { ...req.body };
+      if (data.unitPrice !== undefined && typeof data.unitPrice !== 'number') {
+        delete data.unitPrice;
+      }
+      
+      const validatedData = insertInventoryItemSchema.parse(data);
       const item = await storage.createInventoryItem(validatedData);
       res.status(201).json(item);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: fromZodError(error).message });
       }
+      console.error("Item creation error:", error);
       res.status(500).json({ message: "Failed to create item" });
     }
   });
@@ -169,7 +176,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid item ID" });
       }
 
-      const validatedData = insertInventoryItemSchema.partial().parse(req.body);
+      // unitPrice가 숫자 형태가 아니라면 삭제하여 스키마에서 처리하도록 함
+      const data = { ...req.body };
+      if (data.unitPrice !== undefined && typeof data.unitPrice !== 'number') {
+        delete data.unitPrice;
+      }
+
+      const validatedData = insertInventoryItemSchema.partial().parse(data);
       const updatedItem = await storage.updateInventoryItem(id, validatedData);
 
       if (!updatedItem) {
@@ -181,6 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: fromZodError(error).message });
       }
+      console.error("Item update error:", error);
       res.status(500).json({ message: "Failed to update item" });
     }
   });
