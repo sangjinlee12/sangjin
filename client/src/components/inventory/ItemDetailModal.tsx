@@ -77,9 +77,21 @@ export const ItemDetailModal = ({ isOpen, onClose, itemId, onEdit }: ItemDetailM
     return category ? category.name : "Unknown";
   };
 
-  // Format date for display
+  // Format date for display - 더 안전한 날짜 처리 방식 적용
   const formatDate = (dateString: Date): string => {
-    return new Date(dateString).toISOString().split('T')[0];
+    try {
+      const date = new Date(dateString);
+      // 유효한 날짜인지 확인
+      if (isNaN(date.getTime())) {
+        return "-";
+      }
+      // YYYY-MM-DD 형식으로 변환
+      return date.getFullYear() + "-" + 
+        String(date.getMonth() + 1).padStart(2, "0") + "-" + 
+        String(date.getDate()).padStart(2, "0");
+    } catch (error) {
+      return "-";
+    }
   };
 
   if (!isOpen) return null;

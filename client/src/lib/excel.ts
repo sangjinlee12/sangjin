@@ -2,6 +2,50 @@ import * as XLSX from 'xlsx';
 import { InventoryItem, Category, Transaction } from '@shared/schema';
 
 /**
+ * 날짜를 안전하게 포맷팅하는 헬퍼 함수
+ */
+const formatDateSafely = (dateString: Date): string => {
+  try {
+    const date = new Date(dateString);
+    // 유효한 날짜인지 확인
+    if (isNaN(date.getTime())) {
+      return "-";
+    }
+    // YYYY-MM-DD 형식으로 변환
+    return date.getFullYear() + "-" + 
+      String(date.getMonth() + 1).padStart(2, "0") + "-" + 
+      String(date.getDate()).padStart(2, "0");
+  } catch (error) {
+    return "-";
+  }
+};
+
+/**
+ * 날짜와 시간을 안전하게 포맷팅하는 헬퍼 함수
+ */
+const formatTransactionDateTime = (dateString: Date): { date: string, time: string } => {
+  try {
+    const date = new Date(dateString);
+    // 유효한 날짜인지 확인
+    if (isNaN(date.getTime())) {
+      return { date: "-", time: "-" };
+    }
+    // 날짜 형식: YYYY-MM-DD
+    const formattedDate = date.getFullYear() + "-" + 
+      String(date.getMonth() + 1).padStart(2, "0") + "-" + 
+      String(date.getDate()).padStart(2, "0");
+      
+    // 시간 형식: HH:MM
+    const formattedTime = String(date.getHours()).padStart(2, "0") + ":" + 
+      String(date.getMinutes()).padStart(2, "0");
+      
+    return { date: formattedDate, time: formattedTime };
+  } catch (error) {
+    return { date: "-", time: "-" };
+  }
+};
+
+/**
  * Interface for exporting inventory items to Excel
  */
 export interface ExportInventoryOptions {
@@ -54,8 +98,8 @@ export const exportInventoryToExcel = async (
       '위치': item.location || '',
       '단가': item.unitPrice || '',
       '비고': item.notes || '',
-      '등록일': new Date(item.createdAt).toISOString().split('T')[0],
-      '업데이트': new Date(item.updatedAt).toISOString().split('T')[0]
+      '등록일': formatDateSafely(item.createdAt),
+      '업데이트': formatDateSafely(item.updatedAt)
     }));
     
     // Create workbook and worksheet
@@ -142,9 +186,10 @@ export const exportTransactionHistoryToExcel = async (
       const item = itemMap.get(transaction.itemId);
       const categoryName = item ? categoryMap.get(item.categoryId) || '알 수 없음' : '알 수 없음';
       
+      const formattedDateTime = formatTransactionDateTime(transaction.createdAt);
       return {
-        '날짜': new Date(transaction.createdAt).toISOString().split('T')[0],
-        '시간': new Date(transaction.createdAt).toISOString().split('T')[1].substring(0, 5),
+        '날짜': formattedDateTime.date,
+        '시간': formattedDateTime.time,
         '유형': transaction.type === 'in' ? '입고' : '출고',
         '품목 코드': item ? item.code : '',
         '품목명': item ? item.name : '',
