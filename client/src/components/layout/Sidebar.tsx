@@ -30,8 +30,8 @@ export const Sidebar = () => {
   return (
     <aside className="w-64 bg-white shadow-lg hidden md:block">
       <div className="p-4 border-b border-gray-200">
-        <h1 className="text-xl font-bold text-gray-900">자재 재고관리</h1>
-        <p className="text-sm text-gray-500">통신·전기 자재 시스템</p>
+        <h1 className="text-xl font-bold text-gray-900">에스에스전력</h1>
+        <p className="text-sm text-gray-600">자재관리시스템</p>
       </div>
       
       <nav className="mt-4">
