@@ -1,11 +1,12 @@
 import { 
   users, categories, inventoryItems, transactions, 
-  purchaseOrders, purchaseOrderItems,
+  purchaseOrders, purchaseOrderItems, vendors,
   type User, type InsertUser,
   type Category, type InsertCategory, 
   type InventoryItem, type InsertInventoryItem,
   type PurchaseOrder, type InsertPurchaseOrder,
   type PurchaseOrderItem, type InsertPurchaseOrderItem,
+  type Vendor, type InsertVendor,
   PurchaseOrderStatus,
   type Transaction, type InsertTransaction,
   TransactionType, UnitType
@@ -385,6 +386,14 @@ export class MemStorage implements IStorage {
 // 데이터베이스 스토리지 구현
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
+import {
+  getAllVendors,
+  getVendorById,
+  getVendorByName,
+  createVendor,
+  updateVendor,
+  deleteVendor
+} from "./vendor";
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
