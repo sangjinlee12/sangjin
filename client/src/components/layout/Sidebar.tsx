@@ -41,6 +41,7 @@ export const Sidebar = () => {
           <SidebarItem to="/categories" icon="category" label="카테고리 관리" active={location === "/categories"} />
           <SidebarItem to="/transactions" icon="import_export" label="입/출고 관리" active={location === "/transactions"} />
           <SidebarItem to="/history" icon="history" label="이력 조회" active={location === "/history"} />
+          <SidebarItem to="/purchase-orders" icon="description" label="발주서 관리" active={location === "/purchase-orders" || location.startsWith("/purchase-orders/")} />
           <SidebarItem to="/excel-upload" icon="upload_file" label="엑셀 일괄 업로드" active={location === "/excel-upload"} />
           <SidebarItem to="/settings" icon="settings" label="설정" active={location === "/settings"} />
         </ul>

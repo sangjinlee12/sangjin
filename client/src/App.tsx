@@ -9,6 +9,9 @@ import Transactions from "@/pages/Transactions";
 import History from "@/pages/History";
 import ExcelUpload from "@/pages/ExcelUpload";
 import Settings from "@/pages/Settings";
+import PurchaseOrders from "@/pages/PurchaseOrders";
+import PurchaseOrderForm from "@/pages/PurchaseOrderForm";
+import PurchaseOrderDetail from "@/pages/PurchaseOrderDetail";
 import NotFound from "@/pages/not-found";
 
 function App() {
@@ -21,6 +24,14 @@ function App() {
           <Route path="/categories" component={Categories} />
           <Route path="/transactions" component={Transactions} />
           <Route path="/history" component={History} />
+          <Route path="/purchase-orders" component={PurchaseOrders} />
+          <Route path="/purchase-orders/new" component={PurchaseOrderForm} />
+          <Route path="/purchase-orders/:id/edit">
+            {(params) => <PurchaseOrderForm />}
+          </Route>
+          <Route path="/purchase-orders/:id">
+            {(params) => <PurchaseOrderDetail />}
+          </Route>
           <Route path="/excel-upload" component={ExcelUpload} />
           <Route path="/settings" component={Settings} />
           <Route component={NotFound} />
