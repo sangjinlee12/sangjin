@@ -82,7 +82,7 @@ function Vendors() {
   // 거래업체 생성
   const createMutation = useMutation({
     mutationFn: (data: VendorFormValues) => 
-      apiRequest("/api/vendors", { method: "POST", data }),
+      apiRequest("/api/vendors", { method: "POST", body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
       setIsCreateDialogOpen(false);
@@ -104,7 +104,7 @@ function Vendors() {
   // 거래업체 수정
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: VendorFormValues }) =>
-      apiRequest(`/api/vendors/${id}`, { method: "PUT", data }),
+      apiRequest(`/api/vendors/${id}`, { method: "PUT", body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
       setIsUpdateDialogOpen(false);

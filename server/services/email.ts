@@ -11,34 +11,55 @@ interface EmailOptions {
   }>;
 }
 
+// 이메일 설정 정보를 가져오는 함수
+export function getEmailConfig() {
+  return {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+    host: process.env.EMAIL_HOST || 'smtp.naver.com',
+    port: Number(process.env.EMAIL_PORT || 465)
+  };
+}
+
+// 이메일 설정이 유효한지 확인하는 함수
+export function validateEmailConfig(): { isValid: boolean, message: string } {
+  const config = getEmailConfig();
+  
+  if (!config.user || !config.pass) {
+    return { 
+      isValid: false, 
+      message: '이메일 전송 설정이 없습니다. EMAIL_USER와 EMAIL_PASS 환경 변수를 설정해 주세요.' 
+    };
+  }
+  
+  return { isValid: true, message: '이메일 설정이 유효합니다.' };
+}
+
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   // 환경 변수에서 이메일 설정 가져오기
-  const EMAIL_USER = process.env.EMAIL_USER;
-  const EMAIL_PASS = process.env.EMAIL_PASS;
-  const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.naver.com';
-  const EMAIL_PORT = Number(process.env.EMAIL_PORT || 465);
+  const config = getEmailConfig();
 
   // 필수 환경 변수 확인
-  if (!EMAIL_USER || !EMAIL_PASS) {
+  if (!config.user || !config.pass) {
     console.error('이메일 전송 설정이 없습니다. EMAIL_USER와 EMAIL_PASS 환경 변수를 설정해 주세요.');
     return false;
   }
 
   try {
-    // 트랜스포터 생성
+    // 트랜스포터 생성 (네이버 SMTP 서버용)
     const transporter = nodemailer.createTransport({
-      host: EMAIL_HOST,
-      port: EMAIL_PORT,
+      host: config.host, // smtp.naver.com
+      port: config.port, // 465
       secure: true, // SSL 사용
       auth: {
-        user: EMAIL_USER,
-        pass: EMAIL_PASS,
+        user: config.user, // 네이버 이메일 주소
+        pass: config.pass, // 네이버 이메일 비밀번호 또는 앱 비밀번호
       },
     });
 
     // 이메일 기본 설정
     const mailOptions = {
-      from: `"에스에스전력 자재관리시스템" <${EMAIL_USER}>`,
+      from: `"에스에스전력 자재관리시스템" <${config.user}>`,
       to: options.to,
       subject: options.subject,
       text: options.text,

@@ -232,26 +232,6 @@ export const PurchaseOrderForm = () => {
       newItems[index].amount = quantity * unitPrice;
     }
     
-    // 자재 선택 시 자동 채우기
-    if (field === 'itemId' && inventoryItems) {
-      const selectedItem = inventoryItems.find((item: any) => item.id === Number(value));
-      if (selectedItem) {
-        newItems[index] = {
-          ...newItems[index],
-          itemId: selectedItem.id,
-          itemName: selectedItem.name,
-          specification: selectedItem.specification || "",
-          unitType: selectedItem.unitType || "EA",
-          unitPrice: selectedItem.unitPrice || 0
-        };
-        
-        // 수량과 단가가 있으면 금액 자동 계산
-        if (newItems[index].quantity && newItems[index].unitPrice) {
-          newItems[index].amount = Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
-        }
-      }
-    }
-    
     setItems(newItems);
   };
 
@@ -482,14 +462,8 @@ export const PurchaseOrderForm = () => {
                           value={item.itemName}
                           onChange={(e) => updateItem(index, "itemName", e.target.value)}
                           placeholder="품명"
-                          list={`itemsList-${index}`}
                           required
                         />
-                        <datalist id={`itemsList-${index}`}>
-                          {inventoryItems?.map((invItem: any) => (
-                            <option key={invItem.id} value={invItem.name} data-id={invItem.id} />
-                          ))}
-                        </datalist>
                       </TableCell>
                       <TableCell>
                         <Input
