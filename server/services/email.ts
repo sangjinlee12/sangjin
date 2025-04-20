@@ -11,14 +11,11 @@ interface EmailOptions {
   }>;
 }
 
+import { getEmailSettings } from './settings';
+
 // 이메일 설정 정보를 가져오는 함수
 export function getEmailConfig() {
-  return {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-    host: process.env.EMAIL_HOST || 'smtp.naver.com',
-    port: Number(process.env.EMAIL_PORT || 465)
-  };
+  return getEmailSettings();
 }
 
 // 이메일 설정이 유효한지 확인하는 함수
@@ -28,7 +25,7 @@ export function validateEmailConfig(): { isValid: boolean, message: string } {
   if (!config.user || !config.pass) {
     return { 
       isValid: false, 
-      message: '이메일 전송 설정이 없습니다. EMAIL_USER와 EMAIL_PASS 환경 변수를 설정해 주세요.' 
+      message: '이메일 전송 설정이 없습니다. 이메일 설정 페이지에서 필요한 정보를 입력해 주세요.' 
     };
   }
   
@@ -41,7 +38,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
 
   // 필수 환경 변수 확인
   if (!config.user || !config.pass) {
-    console.error('이메일 전송 설정이 없습니다. EMAIL_USER와 EMAIL_PASS 환경 변수를 설정해 주세요.');
+    console.error('이메일 전송 설정이 없습니다. 이메일 설정 페이지에서 필요한 정보를 입력해 주세요.');
     return false;
   }
 

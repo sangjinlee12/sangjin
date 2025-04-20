@@ -750,13 +750,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/email/config", async (_req: Request, res: Response) => {
     try {
       const { validateEmailConfig } = await import("./services/email");
+      const { getEmailSettings } = await import("./services/settings");
+      
       const config = validateEmailConfig();
-      res.json(config);
+      const settings = getEmailSettings();
+      
+      // 비밀번호는 보안을 위해 마스킹 처리
+      if (settings.pass) {
+        settings.pass = "********";
+      }
+      
+      res.json({
+        ...config,
+        settings
+      });
     } catch (error) {
       console.error("이메일 설정 확인 오류:", error);
       res.status(500).json({ 
         isValid: false, 
         message: "이메일 설정을 확인하는 중 오류가 발생했습니다." 
+      });
+    }
+  });
+  
+  // 이메일 설정 업데이트 API
+  app.post("/api/email/config", async (req: Request, res: Response) => {
+    try {
+      const { user, pass, host, port } = req.body;
+      
+      if (!user || !host || port === undefined) {
+        return res.status(400).json({
+          success: false, 
+          message: "이메일, 서버 주소, 포트 번호는 필수 입력 항목입니다."
+        });
+      }
+      
+      const { updateEmailSettings } = await import("./services/settings");
+      const { validateEmailConfig } = await import("./services/email");
+      
+      // 비밀번호가 마스킹된 상태로 전송된 경우('********') 기존 비밀번호 유지
+      const { getEmailSettings } = await import("./services/settings");
+      const currentSettings = getEmailSettings();
+      const newPass = pass === "********" ? currentSettings.pass : pass;
+      
+      const result = updateEmailSettings({
+        user,
+        pass: newPass,
+        host,
+        port: Number(port)
+      });
+      
+      if (result) {
+        const config = validateEmailConfig();
+        return res.json({
+          success: true,
+          message: "이메일 설정이 업데이트되었습니다.",
+          config
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: "이메일 설정 업데이트에 실패했습니다."
+        });
+      }
+    } catch (error) {
+      console.error("이메일 설정 업데이트 오류:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: `이메일 설정 업데이트 중 오류가 발생했습니다: ${(error as Error).message}` 
       });
     }
   });

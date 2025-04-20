@@ -16,8 +16,17 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { AlertCircle, Mail, CheckCircle, Settings } from "lucide-react";
+import { AlertCircle, Mail, CheckCircle, Settings, Edit } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { 
+  Dialog, 
+  DialogTrigger, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription, 
+  DialogFooter 
+} from "@/components/ui/dialog";
 
 // 이메일 테스트 스키마
 const emailTestSchema = z.object({
@@ -26,16 +35,40 @@ const emailTestSchema = z.object({
 
 type EmailTestFormValues = z.infer<typeof emailTestSchema>;
 
+// 이메일 설정 스키마
+const emailSettingsSchema = z.object({
+  user: z.string().email({ message: "유효한 이메일 주소를 입력해주세요." }),
+  pass: z.string().min(1, { message: "비밀번호는 필수 입력 항목입니다." }),
+  host: z.string().min(1, { message: "서버 주소는 필수 입력 항목입니다." }),
+  port: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+    message: "포트 번호는 양수여야 합니다.",
+  }),
+});
+
+type EmailSettingsFormValues = z.infer<typeof emailSettingsSchema>;
+
 export default function EmailTest() {
   const { toast } = useToast();
-  const [emailConfig, setEmailConfig] = useState<{isValid: boolean, message: string} | null>(null);
+  const [emailConfig, setEmailConfig] = useState<{isValid: boolean, message: string, settings?: any} | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
 
   // 이메일 테스트 폼
   const form = useForm<EmailTestFormValues>({
     resolver: zodResolver(emailTestSchema),
     defaultValues: {
       email: "",
+    },
+  });
+  
+  // 이메일 설정 폼
+  const settingsForm = useForm<EmailSettingsFormValues>({
+    resolver: zodResolver(emailSettingsSchema),
+    defaultValues: {
+      user: "",
+      pass: "",
+      host: "smtp.naver.com",
+      port: "465",
     },
   });
 
@@ -90,14 +123,70 @@ export default function EmailTest() {
     },
   });
 
+  // 이메일 설정 저장 mutation
+  const updateEmailSettingsMutation = useMutation({
+    mutationFn: (data: EmailSettingsFormValues) => 
+      apiRequest("/api/email/config", { 
+        method: "POST", 
+        body: data
+      }),
+    onSuccess: (data) => {
+      if (data.success) {
+        toast({
+          title: "이메일 설정 업데이트 성공",
+          description: data.message,
+        });
+        setEmailConfig(prev => ({
+          ...prev as any,
+          ...data.config,
+          settings: {
+            ...data.config.settings,
+            pass: "********"
+          }
+        }));
+        setIsSettingsDialogOpen(false);
+      } else {
+        toast({
+          title: "이메일 설정 업데이트 실패",
+          description: data.message,
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "이메일 설정 업데이트 실패",
+        description: error.message || "이메일 설정을 업데이트하는데 실패했습니다.",
+        variant: "destructive",
+      });
+    },
+  });
+  
   // 페이지 로드 시 이메일 설정 상태 확인
   useEffect(() => {
     checkEmailConfig();
   }, []);
+  
+  // 설정 다이얼로그 열기 시 현재 설정값 로드
+  useEffect(() => {
+    if (isSettingsDialogOpen && emailConfig?.settings) {
+      settingsForm.reset({
+        user: emailConfig.settings.user || "",
+        pass: "********", // 비밀번호는 보안을 위해 마스킹 처리
+        host: emailConfig.settings.host || "smtp.naver.com",
+        port: String(emailConfig.settings.port || 465),
+      });
+    }
+  }, [isSettingsDialogOpen, emailConfig, settingsForm]);
 
-  // 폼 제출 핸들러
+  // 테스트 이메일 폼 제출 핸들러
   const onSubmit = (data: EmailTestFormValues) => {
     sendTestEmailMutation.mutate(data);
+  };
+  
+  // 이메일 설정 폼 제출 핸들러
+  const onSettingsSubmit = (data: EmailSettingsFormValues) => {
+    updateEmailSettingsMutation.mutate(data);
   };
 
   return (
@@ -186,14 +275,115 @@ export default function EmailTest() {
         </CardContent>
         
         <CardFooter className="flex flex-col space-y-4">
-          <div className="text-sm text-muted-foreground">
-            <p>이메일 서버 설정을 완료하려면 다음 환경변수가 필요합니다:</p>
-            <ul className="list-disc list-inside ml-4 mt-2">
-              <li>EMAIL_USER: 이메일 계정</li>
-              <li>EMAIL_PASS: 이메일 비밀번호 또는 앱 비밀번호</li>
-              <li>EMAIL_HOST: 이메일 서버 주소 (기본값: smtp.naver.com)</li>
-              <li>EMAIL_PORT: 이메일 서버 포트 (기본값: 465)</li>
-            </ul>
+          <div className="flex justify-between items-center w-full">
+            <div className="text-sm text-muted-foreground">
+              <p>현재 이메일 서버 설정:</p>
+              {emailConfig?.settings && (
+                <ul className="list-disc list-inside ml-4 mt-2">
+                  <li>이메일: {emailConfig.settings.user || '-'}</li>
+                  <li>서버: {emailConfig.settings.host || 'smtp.naver.com'}</li>
+                  <li>포트: {emailConfig.settings.port || 465}</li>
+                </ul>
+              )}
+            </div>
+            
+            <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Edit className="mr-2 h-4 w-4" />
+                  이메일 설정 변경
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>이메일 서버 설정</DialogTitle>
+                  <DialogDescription>
+                    이메일 발송에 사용할 SMTP 서버 정보를 입력하세요.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <Form {...settingsForm}>
+                  <form onSubmit={settingsForm.handleSubmit(onSettingsSubmit)} className="space-y-4">
+                    <FormField
+                      control={settingsForm.control}
+                      name="user"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>이메일 주소</FormLabel>
+                          <FormControl>
+                            <Input placeholder="your-email@naver.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={settingsForm.control}
+                      name="pass"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>비밀번호</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="password" 
+                              placeholder="이메일 비밀번호 또는 앱 비밀번호" 
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            이메일 비밀번호 또는 앱 비밀번호를 입력하세요.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={settingsForm.control}
+                      name="host"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>SMTP 서버</FormLabel>
+                          <FormControl>
+                            <Input placeholder="smtp.naver.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={settingsForm.control}
+                      name="port"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>포트</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="465" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <DialogFooter>
+                      <Button 
+                        type="submit" 
+                        disabled={updateEmailSettingsMutation.isPending}
+                      >
+                        {updateEmailSettingsMutation.isPending ? "저장 중..." : "설정 저장"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+          
+          <div className="text-sm text-muted-foreground mt-4">
+            <p>참고: 네이버 이메일 사용 시 앱 비밀번호를 생성하여 사용하는 것을 권장합니다.</p>
+            <p>앱 비밀번호는 네이버 계정 설정 {'>'}  보안 설정 {'>'}  2단계 인증 {'>'} 앱 비밀번호 생성에서 만들 수 있습니다.</p>
           </div>
         </CardFooter>
       </Card>
