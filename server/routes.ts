@@ -746,5 +746,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 이메일 설정 확인 API
+  app.get("/api/email/config", async (_req: Request, res: Response) => {
+    try {
+      const { validateEmailConfig } = await import("./services/email");
+      const config = validateEmailConfig();
+      res.json(config);
+    } catch (error) {
+      console.error("이메일 설정 확인 오류:", error);
+      res.status(500).json({ 
+        isValid: false, 
+        message: "이메일 설정을 확인하는 중 오류가 발생했습니다." 
+      });
+    }
+  });
+
+  // 테스트 이메일 전송 API
+  app.post("/api/email/test", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "이메일 주소가 필요합니다." 
+        });
+      }
+      
+      const { validateEmailConfig, sendTestEmail } = await import("./services/email");
+      
+      // 이메일 설정 확인
+      const config = validateEmailConfig();
+      if (!config.isValid) {
+        return res.status(400).json({ 
+          success: false, 
+          message: config.message 
+        });
+      }
+      
+      // 테스트 이메일 전송
+      const result = await sendTestEmail(email);
+      res.json(result);
+    } catch (error) {
+      console.error("테스트 이메일 전송 오류:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: `테스트 이메일 전송 중 오류가 발생했습니다: ${(error as Error).message}` 
+      });
+    }
+  });
+
   return httpServer;
 }

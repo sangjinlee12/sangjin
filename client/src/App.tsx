@@ -13,6 +13,7 @@ import PurchaseOrders from "@/pages/PurchaseOrders";
 import PurchaseOrderForm from "@/pages/PurchaseOrderForm";
 import PurchaseOrderDetail from "@/pages/PurchaseOrderDetail";
 import Vendors from "@/pages/Vendors";
+import EmailTest from "@/pages/EmailTest";
 import NotFound from "@/pages/not-found";
 
 function App() {

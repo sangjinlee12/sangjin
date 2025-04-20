@@ -77,7 +77,48 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   }
 }
 
-// 발주서 이메일 전송 함수
+// 테스트 이메일 전송 함수
+export async function sendTestEmail(to: string): Promise<{success: boolean, message: string}> {
+  try {
+    const result = await sendEmail({
+      to,
+      subject: '자재관리시스템 이메일 테스트',
+      text: '이 이메일은 자재관리시스템의 이메일 기능 테스트를 위해 발송되었습니다.',
+      html: `
+        <div style="font-family: 'Malgun Gothic', sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="padding: 20px; background-color: #f8f9fa; border-bottom: 3px solid #0062FF;">
+            <h2 style="margin: 0; color: #333;">에스에스전력 자재관리시스템</h2>
+            <p style="margin: 5px 0 0; color: #666;">이메일 테스트</p>
+          </div>
+          
+          <div style="padding: 20px; background-color: white; border: 1px solid #e9ecef; border-top: none;">
+            <p>안녕하세요, 에스에스전력 자재관리시스템입니다.</p>
+            <p>이 이메일은 시스템의 이메일 발송 기능이 정상적으로 작동하는지 테스트하기 위해 발송되었습니다.</p>
+            <p>이 이메일을 받으셨다면 이메일 발송 기능이 정상적으로 작동하고 있음을 의미합니다.</p>
+            <p style="margin-top: 30px;">감사합니다.</p>
+          </div>
+          
+          <div style="padding: 15px; background-color: #f1f3f5; border-top: 1px solid #e9ecef; font-size: 12px; color: #6c757d;">
+            <p>© 2025 주식회사 에스에스전력. All rights reserved.</p>
+          </div>
+        </div>
+      `
+    });
+    
+    if (result) {
+      return { success: true, message: '테스트 이메일이 성공적으로 발송되었습니다.' };
+    } else {
+      return { success: false, message: '테스트 이메일 발송에 실패했습니다. 로그를 확인해주세요.' };
+    }
+  } catch (error) {
+    console.error('테스트 이메일 발송 오류:', error);
+    return { 
+      success: false, 
+      message: `테스트 이메일 발송 중 오류가 발생했습니다: ${(error as Error).message}` 
+    };
+  }
+}
+
 export async function sendPurchaseOrderEmail({
   to,
   projectName,
