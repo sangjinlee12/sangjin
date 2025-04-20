@@ -11,8 +11,6 @@ import {
   type Transaction, type InsertTransaction,
   TransactionType, UnitType
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
 
 export interface IStorage {
   // User methods
@@ -76,8 +74,328 @@ export interface IStorage {
   }>;
 }
 
-export class DatabaseStorage implements IStorage {
+export class MemStorage implements IStorage {
+  private users: Map<number, User>;
+  private categories: Map<number, Category>;
+  private items: Map<number, InventoryItem>;
+  private itemTransactions: Map<number, Transaction>;
+  
+  private userIdCounter: number;
+  private categoryIdCounter: number;
+  private itemIdCounter: number;
+  private transactionIdCounter: number;
+
+  constructor() {
+    this.users = new Map();
+    this.categories = new Map();
+    this.items = new Map();
+    this.itemTransactions = new Map();
+    
+    this.userIdCounter = 1;
+    this.categoryIdCounter = 1;
+    this.itemIdCounter = 1;
+    this.transactionIdCounter = 1;
+    
+    // Initialize with default categories
+    this.initializeDefaultCategories();
+  }
+
+  private initializeDefaultCategories() {
+    const defaultCategories: InsertCategory[] = [
+      { name: "케이블 종류", description: "각종 케이블 자재", color: "#0062FF" },
+      { name: "등기구 종류", description: "조명 및 전기 등기구", color: "#24A148" },
+      { name: "통신자재 종류", description: "통신 관련 자재", color: "#8A3FFC" },
+      { name: "공구 종류", description: "작업용 공구", color: "#FF832B" }
+    ];
+
+    defaultCategories.forEach(category => {
+      this.createCategory(category);
+    });
+  }
+
+  private generateItemCode(categoryPrefix: string): string {
+    const categories: Record<string, string> = {
+      "케이블 종류": "C",
+      "등기구 종류": "L",
+      "통신자재 종류": "T",
+      "공구 종류": "P"
+    };
+    
+    const prefix = categories[categoryPrefix] || "X";
+    const year = new Date().getFullYear();
+    const number = String(this.itemIdCounter).padStart(4, '0');
+    
+    return `${prefix}-${year}-${number}`;
+  }
+
   // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username
+    );
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.userIdCounter++;
+    const user: User = { ...insertUser, id };
+    this.users.set(id, user);
+    return user;
+  }
+
+  // Category methods
+  async getAllCategories(): Promise<Category[]> {
+    return Array.from(this.categories.values());
+  }
+
+  async getCategoryById(id: number): Promise<Category | undefined> {
+    return this.categories.get(id);
+  }
+
+  async getCategoryByName(name: string): Promise<Category | undefined> {
+    return Array.from(this.categories.values()).find(
+      (category) => category.name === name
+    );
+  }
+
+  async createCategory(insertCategory: InsertCategory): Promise<Category> {
+    const id = this.categoryIdCounter++;
+    const category: Category = { ...insertCategory, id };
+    this.categories.set(id, category);
+    return category;
+  }
+
+  async updateCategory(id: number, data: Partial<InsertCategory>): Promise<Category | undefined> {
+    const category = this.categories.get(id);
+    if (!category) return undefined;
+    
+    const updatedCategory = { ...category, ...data };
+    this.categories.set(id, updatedCategory);
+    return updatedCategory;
+  }
+
+  async deleteCategory(id: number): Promise<boolean> {
+    // Check if category is in use by any item
+    const itemsWithCategory = Array.from(this.items.values()).filter(
+      (item) => item.categoryId === id
+    );
+    
+    if (itemsWithCategory.length > 0) {
+      return false;
+    }
+    
+    return this.categories.delete(id);
+  }
+
+  // Inventory item methods
+  async getAllInventoryItems(): Promise<InventoryItem[]> {
+    return Array.from(this.items.values());
+  }
+
+  async getInventoryItemById(id: number): Promise<InventoryItem | undefined> {
+    return this.items.get(id);
+  }
+
+  async getInventoryItemByCode(code: string): Promise<InventoryItem | undefined> {
+    return Array.from(this.items.values()).find(
+      (item) => item.code === code
+    );
+  }
+
+  async getInventoryItemsByCategory(categoryId: number): Promise<InventoryItem[]> {
+    return Array.from(this.items.values()).filter(
+      (item) => item.categoryId === categoryId
+    );
+  }
+
+  async getLowStockItems(): Promise<InventoryItem[]> {
+    return Array.from(this.items.values()).filter(
+      (item) => item.currentQuantity < item.minimumQuantity
+    );
+  }
+
+  async createInventoryItem(insertItem: InsertInventoryItem): Promise<InventoryItem> {
+    const id = this.itemIdCounter++;
+    
+    // Get category to generate code
+    const category = this.categories.get(insertItem.categoryId);
+    const categoryName = category?.name || "기타";
+    
+    // Generate code
+    const code = this.generateItemCode(categoryName);
+    
+    // Create item with timestamps
+    const now = new Date();
+    const item: InventoryItem = { 
+      ...insertItem, 
+      id, 
+      code,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.items.set(id, item);
+    
+    // If initial quantity is set, create an inflow transaction
+    if (insertItem.currentQuantity > 0) {
+      await this.createTransaction({
+        itemId: id,
+        type: "in",
+        quantity: insertItem.currentQuantity,
+        project: "초기 등록",
+        note: "자재 최초 등록"
+      });
+    }
+    
+    return item;
+  }
+
+  async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem | undefined> {
+    const item = this.items.get(id);
+    if (!item) return undefined;
+    
+    // Handle quantity change by creating a transaction
+    if (data.currentQuantity !== undefined && data.currentQuantity !== item.currentQuantity) {
+      const quantityDiff = (data.currentQuantity - item.currentQuantity);
+      
+      if (quantityDiff !== 0) {
+        await this.createTransaction({
+          itemId: id,
+          type: quantityDiff > 0 ? "in" : "out",
+          quantity: Math.abs(quantityDiff),
+          project: "재고 수정",
+          note: "관리자에 의한 수량 조정"
+        });
+      }
+    }
+    
+    const updatedItem = { 
+      ...item, 
+      ...data,
+      updatedAt: new Date()
+    };
+    
+    this.items.set(id, updatedItem);
+    return updatedItem;
+  }
+
+  async deleteInventoryItem(id: number): Promise<boolean> {
+    return this.items.delete(id);
+  }
+
+  // Transaction methods
+  async getAllTransactions(): Promise<Transaction[]> {
+    return Array.from(this.itemTransactions.values());
+  }
+
+  async getTransactionsByItemId(itemId: number): Promise<Transaction[]> {
+    return Array.from(this.itemTransactions.values())
+      .filter(transaction => transaction.itemId === itemId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort by date desc
+  }
+
+  async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
+    const id = this.transactionIdCounter++;
+    const transaction: Transaction = { 
+      ...insertTransaction, 
+      id,
+      createdAt: new Date() 
+    };
+    
+    this.itemTransactions.set(id, transaction);
+    
+    // Update item quantity
+    const item = this.items.get(insertTransaction.itemId);
+    if (item) {
+      const quantityChange = insertTransaction.type === "in" 
+        ? insertTransaction.quantity 
+        : -insertTransaction.quantity;
+      
+      const updatedQuantity = Math.max(0, item.currentQuantity + quantityChange);
+      
+      this.items.set(item.id, {
+        ...item,
+        currentQuantity: updatedQuantity,
+        updatedAt: new Date()
+      });
+    }
+    
+    return transaction;
+  }
+
+  // Dashboard methods
+  async getDashboardStats(): Promise<{
+    totalItems: number;
+    lowStockItems: number;
+    monthlyInflow: number;
+    monthlyOutflow: number;
+    categoryDistribution: {category: string, count: number}[];
+  }> {
+    const items = Array.from(this.items.values());
+    const transactions = Array.from(this.itemTransactions.values());
+    const categories = Array.from(this.categories.values());
+    
+    // Calculate stats
+    const totalItems = items.length;
+    const lowStockItems = items.filter(
+      item => item.currentQuantity < item.minimumQuantity
+    ).length;
+    
+    // Calculate monthly transactions
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const monthlyTransactions = transactions.filter(
+      transaction => transaction.createdAt >= firstDayOfMonth
+    );
+    
+    const monthlyInflow = monthlyTransactions
+      .filter(transaction => transaction.type === "in")
+      .length;
+    
+    const monthlyOutflow = monthlyTransactions
+      .filter(transaction => transaction.type === "out")
+      .length;
+    
+    // Calculate category distribution
+    const categoryMap = new Map<number, number>();
+    
+    items.forEach(item => {
+      const count = categoryMap.get(item.categoryId) || 0;
+      categoryMap.set(item.categoryId, count + 1);
+    });
+    
+    const categoryDistribution = categories.map(category => ({
+      category: category.name,
+      count: categoryMap.get(category.id) || 0
+    }));
+    
+    return {
+      totalItems,
+      lowStockItems,
+      monthlyInflow,
+      monthlyOutflow,
+      categoryDistribution
+    };
+  }
+}
+
+// 데이터베이스 스토리지 구현
+import { db } from "./db";
+import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
+import {
+  getAllVendors,
+  getVendorById,
+  getVendorByName,
+  createVendor,
+  updateVendor,
+  deleteVendor
+} from "./vendor";
+
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
@@ -96,7 +414,6 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  // Category methods
   async getAllCategories(): Promise<Category[]> {
     return await db.select().from(categories);
   }
@@ -136,7 +453,6 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  // Inventory item methods
   async getAllInventoryItems(): Promise<InventoryItem[]> {
     return await db.select().from(inventoryItems);
   }
@@ -284,7 +600,6 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  // Transaction methods
   async getAllTransactions(): Promise<Transaction[]> {
     return await db
       .select()
@@ -333,54 +648,7 @@ export class DatabaseStorage implements IStorage {
     return transaction;
   }
 
-  // Vendor methods
-  async getAllVendors(): Promise<Vendor[]> {
-    return await db.select().from(vendors);
-  }
-
-  async getVendorById(id: number): Promise<Vendor | undefined> {
-    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, id));
-    return vendor || undefined;
-  }
-
-  async getVendorByName(name: string): Promise<Vendor | undefined> {
-    const [vendor] = await db.select().from(vendors).where(eq(vendors.name, name));
-    return vendor || undefined;
-  }
-
-  async createVendor(insertVendor: InsertVendor): Promise<Vendor> {
-    const now = new Date();
-    const [vendor] = await db
-      .insert(vendors)
-      .values({
-        ...insertVendor,
-        createdAt: now,
-        updatedAt: now
-      })
-      .returning();
-    return vendor;
-  }
-
-  async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor | undefined> {
-    const [vendor] = await db
-      .update(vendors)
-      .set({
-        ...data,
-        updatedAt: new Date()
-      })
-      .where(eq(vendors.id, id))
-      .returning();
-    return vendor || undefined;
-  }
-
-  async deleteVendor(id: number): Promise<boolean> {
-    const result = await db
-      .delete(vendors)
-      .where(eq(vendors.id, id));
-    return result.rowCount > 0;
-  }
-
-  // Purchase Order methods
+  // 구매 주문 메서드
   async getAllPurchaseOrders(): Promise<PurchaseOrder[]> {
     return await db
       .select()
@@ -459,18 +727,12 @@ export class DatabaseStorage implements IStorage {
       vendorContact: insertPurchaseOrder.vendorContact || null,
       expectedDeliveryDate: insertPurchaseOrder.expectedDeliveryDate || null,
       notes: insertPurchaseOrder.notes || null,
-      totalAmount: insertPurchaseOrder.totalAmount || "0",
+      totalAmount: '0', // 초기 총액은 0으로 설정
       createdAt: now,
-      updatedAt: now,
-      projectName: insertPurchaseOrder.projectName,
-      manager: insertPurchaseOrder.manager,
-      vendorEmail: insertPurchaseOrder.vendorEmail || null,
-      emailSent: insertPurchaseOrder.emailSent || false,
-      emailSentAt: insertPurchaseOrder.emailSentAt || null,
-      pdfPath: insertPurchaseOrder.pdfPath || null
+      updatedAt: now
     };
     
-    // 구매 주문 생성
+    // 주문서 생성
     const [purchaseOrder] = await db
       .insert(purchaseOrders)
       .values(purchaseOrderToInsert)
@@ -494,31 +756,24 @@ export class DatabaseStorage implements IStorage {
     if (data.vendorContact !== undefined) updateData.vendorContact = data.vendorContact || null;
     if (data.expectedDeliveryDate !== undefined) updateData.expectedDeliveryDate = data.expectedDeliveryDate || null;
     if (data.notes !== undefined) updateData.notes = data.notes || null;
-    if (data.totalAmount !== undefined) updateData.totalAmount = data.totalAmount || "0";
-    if (data.projectName !== undefined) updateData.projectName = data.projectName;
-    if (data.manager !== undefined) updateData.manager = data.manager;
-    if (data.vendorEmail !== undefined) updateData.vendorEmail = data.vendorEmail || null;
-    if (data.emailSent !== undefined) updateData.emailSent = data.emailSent;
-    if (data.emailSentAt !== undefined) updateData.emailSentAt = data.emailSentAt || null;
-    if (data.pdfPath !== undefined) updateData.pdfPath = data.pdfPath || null;
     
-    // 구매 주문 업데이트
-    const [purchaseOrder] = await db
+    // 주문서 업데이트
+    const [updatedPurchaseOrder] = await db
       .update(purchaseOrders)
       .set(updateData)
       .where(eq(purchaseOrders.id, id))
       .returning();
     
-    return purchaseOrder || undefined;
+    return updatedPurchaseOrder || undefined;
   }
 
   async deletePurchaseOrder(id: number): Promise<boolean> {
-    // 먼저 관련된 주문 아이템들을 모두 삭제
+    // 관련 주문 항목 삭제
     await db
       .delete(purchaseOrderItems)
       .where(eq(purchaseOrderItems.purchaseOrderId, id));
     
-    // 그 다음 주문 삭제
+    // 주문서 삭제
     const result = await db
       .delete(purchaseOrders)
       .where(eq(purchaseOrders.id, id))
@@ -527,7 +782,7 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  // Purchase Order Item methods
+  // 구매 주문 항목 메서드
   async getPurchaseOrderItems(purchaseOrderId: number): Promise<PurchaseOrderItem[]> {
     return await db
       .select()
@@ -536,101 +791,123 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPurchaseOrderItem(insertItem: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
-    // 구매 주문 아이템 생성
-    const itemToInsert = {
+    // 재고 항목 정보 가져오기
+    const item = await this.getInventoryItemById(insertItem.itemId);
+    if (!item) {
+      throw new Error("Item not found");
+    }
+    
+    // 단가 추출 (없으면 아이템의 기본 단가 사용)
+    const unitPrice = insertItem.unitPrice || item.unitPrice;
+    
+    // 금액 계산
+    const quantity = insertItem.quantity || 0;
+    const amount = unitPrice ? Number(unitPrice) * quantity : 0;
+    
+    // 주문 항목 생성
+    const orderItemToInsert = {
       purchaseOrderId: insertItem.purchaseOrderId,
-      itemName: insertItem.itemName,
-      specification: insertItem.specification || null,
-      unitType: insertItem.unitType || null,
-      quantity: insertItem.quantity,
-      unitPrice: insertItem.unitPrice || "0",
-      amount: insertItem.amount || "0",
+      itemId: insertItem.itemId,
+      quantity: quantity,
+      unitPrice: unitPrice ? String(unitPrice) : null,
+      amount: String(amount),
       notes: insertItem.notes || null
     };
     
     const [purchaseOrderItem] = await db
       .insert(purchaseOrderItems)
-      .values(itemToInsert)
+      .values(orderItemToInsert)
       .returning();
     
-    // 주문 총액 업데이트
+    // 주문서의 총액 업데이트
     await this.updatePurchaseOrderTotal(insertItem.purchaseOrderId);
     
     return purchaseOrderItem;
   }
 
   async updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem | undefined> {
-    // 업데이트 데이터 준비
-    const updateData: any = {};
-    
-    // 각 필드에 대해 타입 호환성 확보
-    if (data.itemName !== undefined) updateData.itemName = data.itemName;
-    if (data.specification !== undefined) updateData.specification = data.specification || null;
-    if (data.unitType !== undefined) updateData.unitType = data.unitType || null;
-    if (data.quantity !== undefined) updateData.quantity = data.quantity;
-    if (data.unitPrice !== undefined) updateData.unitPrice = data.unitPrice || "0";
-    if (data.amount !== undefined) updateData.amount = data.amount || "0";
-    if (data.notes !== undefined) updateData.notes = data.notes || null;
-    
-    // 주문 아이템 가져오기
+    // 현재 주문 항목 가져오기
     const [currentItem] = await db
       .select()
       .from(purchaseOrderItems)
       .where(eq(purchaseOrderItems.id, id));
     
-    if (!currentItem) return undefined;
+    if (!currentItem) {
+      return undefined;
+    }
     
-    // 주문 아이템 업데이트
+    // 업데이트할 데이터 준비
+    const updateData: any = {};
+    
+    if (data.quantity !== undefined) updateData.quantity = data.quantity;
+    if (data.unitPrice !== undefined) updateData.unitPrice = data.unitPrice ? String(data.unitPrice) : null;
+    if (data.notes !== undefined) updateData.notes = data.notes || null;
+    
+    // 수량이나 단가가 변경되면 금액 다시 계산
+    if (data.quantity !== undefined || data.unitPrice !== undefined) {
+      const quantity = data.quantity !== undefined ? data.quantity : currentItem.quantity;
+      const unitPrice = data.unitPrice !== undefined 
+        ? (data.unitPrice ? String(data.unitPrice) : null) 
+        : currentItem.unitPrice;
+      
+      if (unitPrice) {
+        updateData.amount = String(Number(unitPrice) * quantity);
+      }
+    }
+    
+    // 주문 항목 업데이트
     const [updatedItem] = await db
       .update(purchaseOrderItems)
       .set(updateData)
       .where(eq(purchaseOrderItems.id, id))
       .returning();
     
-    // 주문 총액 업데이트
+    // 주문서의 총액 업데이트
     await this.updatePurchaseOrderTotal(currentItem.purchaseOrderId);
     
     return updatedItem || undefined;
   }
 
   async deletePurchaseOrderItem(id: number): Promise<boolean> {
-    // 주문 아이템 가져오기
+    // 주문 항목의 purchaseOrderId 가져오기
     const [item] = await db
-      .select()
+      .select({ purchaseOrderId: purchaseOrderItems.purchaseOrderId })
       .from(purchaseOrderItems)
       .where(eq(purchaseOrderItems.id, id));
     
-    if (!item) return false;
+    if (!item) {
+      return false;
+    }
     
-    // 주문 아이템 삭제
+    // 주문 항목 삭제
     const result = await db
       .delete(purchaseOrderItems)
       .where(eq(purchaseOrderItems.id, id))
       .returning({ id: purchaseOrderItems.id });
     
-    // 주문 총액 업데이트
+    // 주문서의 총액 업데이트
     await this.updatePurchaseOrderTotal(item.purchaseOrderId);
     
     return result.length > 0;
   }
 
+  // 주문서 총액 업데이트 헬퍼 메서드
   private async updatePurchaseOrderTotal(purchaseOrderId: number): Promise<void> {
-    // 주문에 속한 모든 아이템의 금액을 합산
-    const items = await this.getPurchaseOrderItems(purchaseOrderId);
+    // 모든 주문 항목의 금액 합계 계산
+    const totalResult = await db
+      .select({ total: sql`sum(amount)` })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.purchaseOrderId, purchaseOrderId));
     
-    let totalAmount = 0;
-    items.forEach(item => {
-      totalAmount += parseFloat(item.amount);
-    });
+    const totalAmount = Number(totalResult[0].total) || 0;
     
-    // 주문 업데이트
+    // 주문서 총액 업데이트
     await db
       .update(purchaseOrders)
-      .set({ totalAmount: totalAmount.toString() })
+      .set({ totalAmount: String(totalAmount) })
       .where(eq(purchaseOrders.id, purchaseOrderId));
   }
 
-  // Dashboard methods
   async getDashboardStats(): Promise<{
     totalItems: number;
     lowStockItems: number;
@@ -638,27 +915,25 @@ export class DatabaseStorage implements IStorage {
     monthlyOutflow: number;
     categoryDistribution: {category: string, count: number}[];
   }> {
-    // 총 아이템 수
+    // 총 자재 수
     const totalItemsResult = await db.select({ count: sql`count(*)` }).from(inventoryItems);
-    const totalItems = Number(totalItemsResult[0].count) || 0;
+    const totalItems = Number(totalItemsResult[0].count);
     
-    // 재고 부족 아이템 수
+    // 부족 재고 수
     const lowStockItemsResult = await db
       .select({ count: sql`count(*)` })
       .from(inventoryItems)
       .where(sql`${inventoryItems.currentQuantity} < ${inventoryItems.minimumQuantity}`);
-    const lowStockItems = Number(lowStockItemsResult[0].count) || 0;
+    const lowStockItems = Number(lowStockItemsResult[0].count);
     
-    // 이번 달의 첫날과 마지막 날
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    // 이번 달 시작일과 끝일
+    const today = new Date();
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     
-    // 월간 입고량
+    // 이번 달 입고량
     const monthlyInflowResult = await db
-      .select({
-        sum: sql`COALESCE(sum(${transactions.quantity}), 0)`
-      })
+      .select({ sum: sql`sum(quantity)` })
       .from(transactions)
       .where(
         and(
@@ -669,11 +944,9 @@ export class DatabaseStorage implements IStorage {
       );
     const monthlyInflow = Number(monthlyInflowResult[0].sum) || 0;
     
-    // 월간 출고량
+    // 이번 달 출고량
     const monthlyOutflowResult = await db
-      .select({
-        sum: sql`COALESCE(sum(${transactions.quantity}), 0)`
-      })
+      .select({ sum: sql`sum(quantity)` })
       .from(transactions)
       .where(
         and(
@@ -714,4 +987,6 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
+// 데이터베이스 스토리지 사용
+export const storage = new DatabaseStorage();
 export const storage = new DatabaseStorage();
