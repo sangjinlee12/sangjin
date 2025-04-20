@@ -128,31 +128,48 @@ export const purchaseOrders = pgTable("purchase_orders", {
   id: serial("id").primaryKey(),
   orderNumber: text("order_number").notNull().unique(),
   status: text("status").notNull().default(PurchaseOrderStatus.DRAFT),
+  orderDate: timestamp("order_date").notNull().defaultNow(),
+  projectName: text("project_name").notNull(),
+  manager: text("manager").notNull(),
+  contactNumber: text("contact_number"),
   vendorName: text("vendor_name").notNull(),
   vendorContact: text("vendor_contact"),
+  vendorEmail: text("vendor_email"),
   expectedDeliveryDate: timestamp("expected_delivery_date"),
   notes: text("notes"),
   totalAmount: numeric("total_amount", { precision: 15, scale: 2 }),
+  pdfPath: text("pdf_path"),
+  emailSent: boolean("email_sent").default(false),
+  emailSentAt: timestamp("email_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders)
-  .omit({ id: true, orderNumber: true, createdAt: true, updatedAt: true, totalAmount: true });
+  .omit({ id: true, orderNumber: true, createdAt: true, updatedAt: true, totalAmount: true, pdfPath: true, emailSent: true, emailSentAt: true });
 
 // 구매 주문 항목 스키마
 export const purchaseOrderItems = pgTable("purchase_order_items", {
   id: serial("id").primaryKey(),
   purchaseOrderId: integer("purchase_order_id").notNull(),
-  itemId: integer("item_id").notNull(),
+  itemId: integer("item_id"),  // NULL 허용 (직접 입력 항목인 경우)
+  itemName: text("item_name").notNull(),
+  specification: text("specification"),
+  unitType: text("unit_type"),
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
   amount: numeric("amount", { precision: 15, scale: 2 }),
   notes: text("notes"),
 });
 
+// 자재 선택 또는 직접 입력을 위한 스키마
 export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderItems)
-  .omit({ id: true, amount: true });
+  .omit({ id: true, amount: true })
+  .extend({
+    // unitPrice와 amount는 문자열이나 숫자 모두 허용
+    unitPrice: z.union([z.number(), z.string(), z.null()]).optional(),
+    amount: z.union([z.number(), z.string(), z.null()]).optional()
+  });
 
 // 타입 정의
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
