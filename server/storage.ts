@@ -40,6 +40,14 @@ export interface IStorage {
   getTransactionsByItemId(itemId: number): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   
+  // Vendor methods
+  getAllVendors(): Promise<Vendor[]>;
+  getVendorById(id: number): Promise<Vendor | undefined>;
+  getVendorByName(name: string): Promise<Vendor | undefined>;
+  createVendor(vendor: InsertVendor): Promise<Vendor>;
+  updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor | undefined>;
+  deleteVendor(id: number): Promise<boolean>;
+  
   // Purchase order methods
   getAllPurchaseOrders(): Promise<PurchaseOrder[]>;
   getPurchaseOrderById(id: number): Promise<PurchaseOrder | undefined>;

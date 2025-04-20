@@ -2,6 +2,17 @@ import { pgTable, text, serial, integer, numeric, timestamp, boolean, primaryKey
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// 회사 정보 (고정)
+export const COMPANY_INFO = {
+  name: "주식회사 에스에스전력",
+  address: "서울특별시 강남구 테헤란로 123, 5층",
+  phone: "02-123-4567",
+  fax: "02-123-4568",
+  email: "info@sselectric.co.kr",
+  registrationNumber: "123-45-67890",
+  ceo: "홍길동"
+};
+
 // User schema
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -172,6 +183,26 @@ export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderIte
   });
 
 // 타입 정의
+// 거래업체 스키마
+export const vendors = pgTable("vendors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  address: text("address"),
+  contactPerson: text("contact_person"),
+  phone: text("phone"),
+  email: text("email"),
+  businessNumber: text("business_number"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertVendorSchema = createInsertSchema(vendors)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+
+export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendor = z.infer<typeof insertVendorSchema>;
+
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
 
