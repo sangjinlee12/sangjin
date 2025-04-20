@@ -219,6 +219,10 @@ export const PurchaseOrderDetail = () => {
               <h4 className="font-medium text-sm text-gray-500 mb-1">업체 연락처</h4>
               <p>{order.vendorContact || '-'}</p>
             </div>
+            <div className="md:col-span-2">
+              <h4 className="font-medium text-sm text-gray-500 mb-1">업체 이메일</h4>
+              <p>{order.vendorEmail || '-'}</p>
+            </div>
             {order.notes && (
               <div className="md:col-span-2">
                 <h4 className="font-medium text-sm text-gray-500 mb-1">비고</h4>

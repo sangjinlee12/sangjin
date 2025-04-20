@@ -10,6 +10,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { UnitType } from "@shared/schema";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 // 자재 단위 목록
 const unitTypeOptions = [
@@ -85,6 +92,18 @@ export const PurchaseOrderForm = () => {
       const response = await fetch(queryKey[0]);
       if (!response.ok) {
         throw new Error("Failed to fetch inventory items");
+      }
+      return response.json();
+    }
+  });
+  
+  // 거래업체 목록 조회
+  const { data: vendors, isLoading: isLoadingVendors } = useQuery({
+    queryKey: ["/api/vendors"],
+    queryFn: async ({ queryKey }) => {
+      const response = await fetch(queryKey[0]);
+      if (!response.ok) {
+        throw new Error("거래업체 목록을 가져오는데 실패했습니다");
       }
       return response.json();
     }
@@ -358,13 +377,45 @@ export const PurchaseOrderForm = () => {
               </div>
               <div>
                 <Label htmlFor="vendorName">업체명 *</Label>
-                <Input
-                  id="vendorName"
-                  value={order.vendorName}
-                  onChange={(e) => setOrder({ ...order, vendorName: e.target.value })}
-                  placeholder="업체명을 입력하세요"
-                  required
-                />
+                {vendors && vendors.length > 0 ? (
+                  <Select
+                    value={order.vendorName}
+                    onValueChange={(value) => {
+                      const selectedVendor = vendors.find((v: any) => v.name === value);
+                      setOrder({
+                        ...order,
+                        vendorName: value,
+                        vendorContact: selectedVendor?.phone || "",
+                        vendorEmail: selectedVendor?.email || ""
+                      });
+                      if (selectedVendor?.email) {
+                        setEmailTo(selectedVendor.email);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="거래업체를 선택하세요" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vendors.map((vendor: any) => (
+                        <SelectItem key={vendor.id} value={vendor.name}>
+                          {vendor.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="vendorName"
+                    value={order.vendorName}
+                    onChange={(e) => setOrder({ ...order, vendorName: e.target.value })}
+                    placeholder="업체명을 입력하세요"
+                    required
+                  />
+                )}
+                {isLoadingVendors && (
+                  <div className="text-xs text-gray-500 mt-1">거래업체 목록을 불러오는 중...</div>
+                )}
               </div>
               <div>
                 <Label htmlFor="vendorContact">업체 연락처</Label>
@@ -373,6 +424,19 @@ export const PurchaseOrderForm = () => {
                   value={order.vendorContact || ""}
                   onChange={(e) => setOrder({ ...order, vendorContact: e.target.value })}
                   placeholder="업체 연락처를 입력하세요"
+                />
+              </div>
+              <div>
+                <Label htmlFor="vendorEmail">업체 이메일</Label>
+                <Input
+                  id="vendorEmail"
+                  type="email"
+                  value={order.vendorEmail || ""}
+                  onChange={(e) => {
+                    setOrder({ ...order, vendorEmail: e.target.value });
+                    setEmailTo(e.target.value);
+                  }}
+                  placeholder="업체 이메일 주소를 입력하세요"
                 />
               </div>
               <div className="md:col-span-2">
