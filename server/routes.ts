@@ -12,6 +12,7 @@ import {
   insertPurchaseOrderSchema,
   insertPurchaseOrderItemSchema
 } from "@shared/schema";
+import { registerVendorRoutes } from "./routes/vendor";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import * as fs from 'fs';
@@ -25,6 +26,9 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+  
+  // 거래업체 및 회사 정보 API 등록
+  registerVendorRoutes(app);
 
   // Categories API
   app.get("/api/categories", async (_req: Request, res: Response) => {
