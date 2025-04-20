@@ -36,6 +36,7 @@ function App() {
           </Route>
           <Route path="/excel-upload" component={ExcelUpload} />
           <Route path="/vendors" component={Vendors} />
+          <Route path="/email-test" component={EmailTest} />
           <Route path="/settings" component={Settings} />
           <Route component={NotFound} />
         </Switch>

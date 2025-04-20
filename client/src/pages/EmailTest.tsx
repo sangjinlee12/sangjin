@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { 
   Card, 
@@ -91,9 +91,9 @@ export default function EmailTest() {
   });
 
   // 페이지 로드 시 이메일 설정 상태 확인
-  useState(() => {
+  useEffect(() => {
     checkEmailConfig();
-  });
+  }, []);
 
   // 폼 제출 핸들러
   const onSubmit = (data: EmailTestFormValues) => {

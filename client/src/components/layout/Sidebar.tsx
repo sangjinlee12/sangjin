@@ -44,6 +44,7 @@ export const Sidebar = () => {
           <SidebarItem to="/purchase-orders" icon="description" label="발주서 관리" active={location === "/purchase-orders" || location.startsWith("/purchase-orders/")} />
           <SidebarItem to="/vendors" icon="business" label="거래업체 관리" active={location === "/vendors"} />
           <SidebarItem to="/excel-upload" icon="upload_file" label="엑셀 일괄 업로드" active={location === "/excel-upload"} />
+          <SidebarItem to="/email-test" icon="email" label="이메일 테스트" active={location === "/email-test"} />
           <SidebarItem to="/settings" icon="settings" label="설정" active={location === "/settings"} />
         </ul>
       </nav>
