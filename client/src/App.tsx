@@ -12,6 +12,7 @@ import Settings from "@/pages/Settings";
 import PurchaseOrders from "@/pages/PurchaseOrders";
 import PurchaseOrderForm from "@/pages/PurchaseOrderForm";
 import PurchaseOrderDetail from "@/pages/PurchaseOrderDetail";
+import Vendors from "@/pages/Vendors";
 import NotFound from "@/pages/not-found";
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
             {(params) => <PurchaseOrderDetail />}
           </Route>
           <Route path="/excel-upload" component={ExcelUpload} />
+          <Route path="/vendors" component={Vendors} />
           <Route path="/settings" component={Settings} />
           <Route component={NotFound} />
         </Switch>
