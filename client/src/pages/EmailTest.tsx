@@ -190,11 +190,11 @@ export default function EmailTest() {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold flex items-center">
-            <Mail className="mr-2 h-6 w-6" />
+    <div className="container mx-auto p-2 sm:p-4">
+      <Card className="shadow-md">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-slate-50 border-b">
+          <CardTitle className="text-xl sm:text-2xl font-bold flex items-center">
+            <Mail className="mr-2 h-5 w-5 sm:h-6 sm:w-6 text-blue-500" />
             이메일 서버 설정 테스트
           </CardTitle>
           <CardDescription>
@@ -202,16 +202,20 @@ export default function EmailTest() {
           </CardDescription>
         </CardHeader>
         
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 p-3 sm:p-6">
           {/* 이메일 설정 상태 */}
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">이메일 서버 설정 상태</h3>
+          <div className="space-y-4 bg-slate-50 p-4 rounded-lg border">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <h3 className="text-lg font-medium flex items-center">
+                <Settings className="mr-2 h-5 w-5 text-blue-500" />
+                이메일 서버 설정 상태
+              </h3>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={checkEmailConfig}
                 disabled={isLoadingConfig}
+                className="w-full sm:w-auto"
               >
                 <Settings className="mr-2 h-4 w-4" />
                 {isLoadingConfig ? "확인 중..." : "설정 확인"}
@@ -219,7 +223,7 @@ export default function EmailTest() {
             </div>
             
             {emailConfig ? (
-              <Alert variant={emailConfig.isValid ? "default" : "destructive"}>
+              <Alert variant={emailConfig.isValid ? "default" : "destructive"} className="mt-3">
                 {emailConfig.isValid ? (
                   <CheckCircle className="h-4 w-4" />
                 ) : (
@@ -240,8 +244,11 @@ export default function EmailTest() {
           </div>
           
           {/* 테스트 이메일 발송 폼 */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">테스트 이메일 발송</h3>
+          <div className="space-y-4 p-4 bg-white rounded-lg border">
+            <h3 className="text-lg font-medium flex items-center">
+              <Mail className="mr-2 h-5 w-5 text-blue-500" />
+              테스트 이메일 발송
+            </h3>
             
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -252,7 +259,11 @@ export default function EmailTest() {
                     <FormItem>
                       <FormLabel>이메일 주소</FormLabel>
                       <FormControl>
-                        <Input placeholder="test@example.com" {...field} />
+                        <Input 
+                          placeholder="test@example.com" 
+                          className="w-full" 
+                          {...field} 
+                        />
                       </FormControl>
                       <FormDescription>
                         테스트 이메일을 받을 이메일 주소를 입력하세요.
@@ -265,7 +276,7 @@ export default function EmailTest() {
                 <Button 
                   type="submit" 
                   disabled={sendTestEmailMutation.isPending || !emailConfig?.isValid}
-                  className="w-full"
+                  className="w-full sm:w-auto"
                 >
                   {sendTestEmailMutation.isPending ? "이메일 전송 중..." : "테스트 이메일 발송"}
                 </Button>
@@ -274,10 +285,11 @@ export default function EmailTest() {
           </div>
         </CardContent>
         
-        <CardFooter className="flex flex-col space-y-4">
-          <div className="flex justify-between items-center w-full">
+        <CardFooter className="flex flex-col space-y-4 p-3 sm:p-6 bg-slate-50">
+          {/* 모바일에서는 세로로, 데스크탑에서는 가로로 배열 */}
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center w-full gap-4">
             <div className="text-sm text-muted-foreground">
-              <p>현재 이메일 서버 설정:</p>
+              <p className="font-medium">현재 이메일 서버 설정:</p>
               {emailConfig?.settings && (
                 <ul className="list-disc list-inside ml-4 mt-2">
                   <li>이메일: {emailConfig.settings.user || '-'}</li>
@@ -289,12 +301,12 @@ export default function EmailTest() {
             
             <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="w-full md:w-auto mt-2 md:mt-0">
                   <Edit className="mr-2 h-4 w-4" />
                   이메일 설정 변경
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent className="sm:max-w-[425px] w-[95vw] max-w-[95vw] sm:w-auto">
                 <DialogHeader>
                   <DialogTitle>이메일 서버 설정</DialogTitle>
                   <DialogDescription>
@@ -367,10 +379,11 @@ export default function EmailTest() {
                       )}
                     />
                     
-                    <DialogFooter>
+                    <DialogFooter className="mt-6">
                       <Button 
                         type="submit" 
                         disabled={updateEmailSettingsMutation.isPending}
+                        className="w-full sm:w-auto"
                       >
                         {updateEmailSettingsMutation.isPending ? "저장 중..." : "설정 저장"}
                       </Button>
@@ -381,9 +394,13 @@ export default function EmailTest() {
             </Dialog>
           </div>
           
-          <div className="text-sm text-muted-foreground mt-4">
-            <p>참고: 네이버 이메일 사용 시 앱 비밀번호를 생성하여 사용하는 것을 권장합니다.</p>
-            <p>앱 비밀번호는 네이버 계정 설정 {'>'}  보안 설정 {'>'}  2단계 인증 {'>'} 앱 비밀번호 생성에서 만들 수 있습니다.</p>
+          <div className="text-sm text-muted-foreground mt-4 p-3 bg-white rounded-md border">
+            <div className="flex items-center font-medium text-blue-600 mb-1">
+              <AlertCircle className="h-4 w-4 mr-1" />
+              참고 사항
+            </div>
+            <p className="mt-1">네이버 이메일 사용 시 앱 비밀번호를 생성하여 사용하는 것을 권장합니다.</p>
+            <p className="mt-1">앱 비밀번호는 네이버 계정 설정 {'>'}  보안 설정 {'>'}  2단계 인증 {'>'} 앱 비밀번호 생성에서 만들 수 있습니다.</p>
           </div>
         </CardFooter>
       </Card>
