@@ -714,4 +714,539 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// 임시로 MemStorage를 사용하여 문제를 해결
+export class MemStorage implements IStorage {
+  private users: Map<number, User>;
+  private categories: Map<number, Category>;
+  private items: Map<number, InventoryItem>;
+  private itemTransactions: Map<number, Transaction>;
+  private vendors: Map<number, Vendor>;
+  private purchaseOrders: Map<number, PurchaseOrder>;
+  private purchaseOrderItems: Map<number, PurchaseOrderItem>;
+  
+  private userIdCounter: number;
+  private categoryIdCounter: number;
+  private itemIdCounter: number;
+  private transactionIdCounter: number;
+  private vendorIdCounter: number;
+  private purchaseOrderIdCounter: number;
+  private purchaseOrderItemIdCounter: number;
+
+  constructor() {
+    this.users = new Map();
+    this.categories = new Map();
+    this.items = new Map();
+    this.itemTransactions = new Map();
+    this.vendors = new Map();
+    this.purchaseOrders = new Map();
+    this.purchaseOrderItems = new Map();
+    
+    this.userIdCounter = 1;
+    this.categoryIdCounter = 1;
+    this.itemIdCounter = 1;
+    this.transactionIdCounter = 1;
+    this.vendorIdCounter = 1;
+    this.purchaseOrderIdCounter = 1;
+    this.purchaseOrderItemIdCounter = 1;
+    
+    // Initialize with default categories
+    this.initializeDefaultCategories();
+  }
+
+  private initializeDefaultCategories() {
+    const defaultCategories: InsertCategory[] = [
+      { name: "전기케이블류", description: "전기 공사에 사용되는 케이블 자재", color: "#0062FF" },
+      { name: "통신케이블류", description: "통신 공사에 사용되는 케이블 자재", color: "#24A148" },
+      { name: "등기구류", description: "조명 및 전기 등기구", color: "#8A3FFC" },
+      { name: "통신자재류", description: "통신 관련 자재", color: "#FF832B" }
+    ];
+
+    defaultCategories.forEach(category => {
+      this.createCategory(category);
+    });
+  }
+
+  private generateItemCode(categoryPrefix: string): string {
+    const categoryMap: Record<string, string> = {
+      "전기케이블류": "전",
+      "통신케이블류": "통",
+      "등기구류": "등",
+      "통신자재류": "자"
+    };
+    
+    const prefix = categoryMap[categoryPrefix] || "기타";
+    const year = new Date().getFullYear();
+    const number = String(this.itemIdCounter).padStart(4, '0');
+    
+    return `${prefix}-${year}-${number}`;
+  }
+
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username
+    );
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.userIdCounter++;
+    const user: User = { ...insertUser, id };
+    this.users.set(id, user);
+    return user;
+  }
+
+  // Category methods
+  async getAllCategories(): Promise<Category[]> {
+    return Array.from(this.categories.values());
+  }
+
+  async getCategoryById(id: number): Promise<Category | undefined> {
+    return this.categories.get(id);
+  }
+
+  async getCategoryByName(name: string): Promise<Category | undefined> {
+    return Array.from(this.categories.values()).find(
+      (category) => category.name === name
+    );
+  }
+
+  async createCategory(insertCategory: InsertCategory): Promise<Category> {
+    const id = this.categoryIdCounter++;
+    const category: Category = { ...insertCategory, id };
+    this.categories.set(id, category);
+    return category;
+  }
+
+  async updateCategory(id: number, data: Partial<InsertCategory>): Promise<Category | undefined> {
+    const category = this.categories.get(id);
+    if (!category) return undefined;
+    
+    const updatedCategory = { ...category, ...data };
+    this.categories.set(id, updatedCategory);
+    return updatedCategory;
+  }
+
+  async deleteCategory(id: number): Promise<boolean> {
+    // Check if category is in use by any item
+    const itemsWithCategory = Array.from(this.items.values()).filter(
+      (item) => item.categoryId === id
+    );
+    
+    if (itemsWithCategory.length > 0) {
+      return false;
+    }
+    
+    return this.categories.delete(id);
+  }
+
+  // Inventory item methods
+  async getAllInventoryItems(): Promise<InventoryItem[]> {
+    return Array.from(this.items.values());
+  }
+
+  async getInventoryItemById(id: number): Promise<InventoryItem | undefined> {
+    return this.items.get(id);
+  }
+
+  async getInventoryItemByCode(code: string): Promise<InventoryItem | undefined> {
+    return Array.from(this.items.values()).find(
+      (item) => item.code === code
+    );
+  }
+
+  async getInventoryItemsByCategory(categoryId: number): Promise<InventoryItem[]> {
+    return Array.from(this.items.values()).filter(
+      (item) => item.categoryId === categoryId
+    );
+  }
+
+  async getLowStockItems(): Promise<InventoryItem[]> {
+    return Array.from(this.items.values()).filter(
+      (item) => item.currentQuantity < item.minimumQuantity
+    );
+  }
+
+  async createInventoryItem(insertItem: InsertInventoryItem): Promise<InventoryItem> {
+    const id = this.itemIdCounter++;
+    
+    // Get category to generate code
+    const category = this.categories.get(insertItem.categoryId);
+    const categoryName = category?.name || "기타";
+    
+    // Generate code
+    const code = this.generateItemCode(categoryName);
+    
+    // Create item with timestamps
+    const now = new Date();
+    const item: InventoryItem = { 
+      ...insertItem, 
+      id, 
+      code,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.items.set(id, item);
+    
+    // If initial quantity is set, create an inflow transaction
+    if (insertItem.currentQuantity > 0) {
+      await this.createTransaction({
+        itemId: id,
+        type: TransactionType.IN,
+        quantity: insertItem.currentQuantity,
+        project: "초기 등록",
+        note: "자재 최초 등록"
+      });
+    }
+    
+    return item;
+  }
+
+  async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem | undefined> {
+    const item = this.items.get(id);
+    if (!item) return undefined;
+    
+    // Handle quantity change by creating a transaction
+    if (data.currentQuantity !== undefined && data.currentQuantity !== item.currentQuantity) {
+      const quantityDiff = (data.currentQuantity - item.currentQuantity);
+      
+      if (quantityDiff !== 0) {
+        await this.createTransaction({
+          itemId: id,
+          type: quantityDiff > 0 ? TransactionType.IN : TransactionType.OUT,
+          quantity: Math.abs(quantityDiff),
+          project: "재고 수정",
+          note: "관리자에 의한 수량 조정"
+        });
+      }
+    }
+    
+    const updatedItem = { 
+      ...item, 
+      ...data,
+      updatedAt: new Date()
+    };
+    
+    this.items.set(id, updatedItem);
+    return updatedItem;
+  }
+
+  async deleteInventoryItem(id: number): Promise<boolean> {
+    return this.items.delete(id);
+  }
+
+  // Transaction methods
+  async getAllTransactions(): Promise<Transaction[]> {
+    return Array.from(this.itemTransactions.values());
+  }
+
+  async getTransactionsByItemId(itemId: number): Promise<Transaction[]> {
+    return Array.from(this.itemTransactions.values())
+      .filter(transaction => transaction.itemId === itemId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort by date desc
+  }
+
+  async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
+    const id = this.transactionIdCounter++;
+    const transaction: Transaction = { 
+      ...insertTransaction, 
+      id,
+      createdAt: new Date() 
+    };
+    
+    this.itemTransactions.set(id, transaction);
+    
+    // Update item quantity
+    const item = this.items.get(insertTransaction.itemId);
+    if (item) {
+      const quantityChange = insertTransaction.type === TransactionType.IN
+        ? insertTransaction.quantity 
+        : -insertTransaction.quantity;
+      
+      const updatedQuantity = Math.max(0, item.currentQuantity + quantityChange);
+      
+      this.items.set(item.id, {
+        ...item,
+        currentQuantity: updatedQuantity,
+        updatedAt: new Date()
+      });
+    }
+    
+    return transaction;
+  }
+
+  // Vendor methods
+  async getAllVendors(): Promise<Vendor[]> {
+    return Array.from(this.vendors.values());
+  }
+
+  async getVendorById(id: number): Promise<Vendor | undefined> {
+    return this.vendors.get(id);
+  }
+
+  async getVendorByName(name: string): Promise<Vendor | undefined> {
+    return Array.from(this.vendors.values()).find(
+      vendor => vendor.name === name
+    );
+  }
+
+  async createVendor(insertVendor: InsertVendor): Promise<Vendor> {
+    const id = this.vendorIdCounter++;
+    const vendor: Vendor = {
+      ...insertVendor,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.vendors.set(id, vendor);
+    return vendor;
+  }
+
+  async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor | undefined> {
+    const vendor = this.vendors.get(id);
+    if (!vendor) return undefined;
+
+    const updatedVendor = {
+      ...vendor,
+      ...data,
+      updatedAt: new Date()
+    };
+    this.vendors.set(id, updatedVendor);
+    return updatedVendor;
+  }
+
+  async deleteVendor(id: number): Promise<boolean> {
+    // Check if vendor is used in purchase orders
+    const ordersWithVendor = Array.from(this.purchaseOrders.values()).filter(
+      order => order.vendorId === id
+    );
+    
+    if (ordersWithVendor.length > 0) {
+      return false;
+    }
+    
+    return this.vendors.delete(id);
+  }
+
+  // Purchase order methods
+  async getAllPurchaseOrders(): Promise<PurchaseOrder[]> {
+    return Array.from(this.purchaseOrders.values());
+  }
+
+  async getPurchaseOrderById(id: number): Promise<PurchaseOrder | undefined> {
+    return this.purchaseOrders.get(id);
+  }
+
+  async getPurchaseOrderByOrderNumber(orderNumber: string): Promise<PurchaseOrder | undefined> {
+    return Array.from(this.purchaseOrders.values()).find(
+      order => order.orderNumber === orderNumber
+    );
+  }
+
+  async getPurchaseOrdersByStatus(status: PurchaseOrderStatus): Promise<PurchaseOrder[]> {
+    return Array.from(this.purchaseOrders.values()).filter(
+      order => order.status === status
+    );
+  }
+
+  private async generateOrderNumber(): Promise<string> {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    const baseNumber = `PO-${year}${month}${day}`;
+    const existingOrders = Array.from(this.purchaseOrders.values())
+      .filter(order => order.orderNumber.startsWith(baseNumber));
+    
+    const sequence = (existingOrders.length + 1).toString().padStart(3, '0');
+    return `${baseNumber}-${sequence}`;
+  }
+
+  async createPurchaseOrder(insertOrder: InsertPurchaseOrder): Promise<PurchaseOrder> {
+    const id = this.purchaseOrderIdCounter++;
+    const orderNumber = await this.generateOrderNumber();
+    
+    const order: PurchaseOrder = {
+      ...insertOrder,
+      id,
+      orderNumber,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      totalAmount: 0, // Will be updated when items are added
+      status: insertOrder.status || PurchaseOrderStatus.DRAFT
+    };
+    
+    this.purchaseOrders.set(id, order);
+    return order;
+  }
+
+  async updatePurchaseOrder(id: number, data: Partial<InsertPurchaseOrder>): Promise<PurchaseOrder | undefined> {
+    const order = this.purchaseOrders.get(id);
+    if (!order) return undefined;
+
+    const updatedOrder = {
+      ...order,
+      ...data,
+      updatedAt: new Date()
+    };
+    
+    this.purchaseOrders.set(id, updatedOrder);
+    return updatedOrder;
+  }
+
+  async deletePurchaseOrder(id: number): Promise<boolean> {
+    // Delete associated items first
+    const orderItems = Array.from(this.purchaseOrderItems.values())
+      .filter(item => item.purchaseOrderId === id);
+    
+    orderItems.forEach(item => {
+      this.purchaseOrderItems.delete(item.id);
+    });
+    
+    return this.purchaseOrders.delete(id);
+  }
+
+  // Purchase order items methods
+  async getPurchaseOrderItems(purchaseOrderId: number): Promise<PurchaseOrderItem[]> {
+    return Array.from(this.purchaseOrderItems.values())
+      .filter(item => item.purchaseOrderId === purchaseOrderId);
+  }
+
+  async createPurchaseOrderItem(insertItem: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
+    const id = this.purchaseOrderItemIdCounter++;
+    
+    const item: PurchaseOrderItem = {
+      ...insertItem,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      totalPrice: insertItem.quantity * insertItem.unitPrice
+    };
+    
+    this.purchaseOrderItems.set(id, item);
+    
+    // Update purchase order total
+    await this.updatePurchaseOrderTotal(insertItem.purchaseOrderId);
+    
+    return item;
+  }
+
+  async updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem | undefined> {
+    const item = this.purchaseOrderItems.get(id);
+    if (!item) return undefined;
+    
+    // Calculate new total price if quantity or unit price changed
+    let totalPrice = item.totalPrice;
+    if (data.quantity !== undefined || data.unitPrice !== undefined) {
+      const quantity = data.quantity !== undefined ? data.quantity : item.quantity;
+      const unitPrice = data.unitPrice !== undefined ? data.unitPrice : item.unitPrice;
+      totalPrice = quantity * unitPrice;
+    }
+    
+    const updatedItem = {
+      ...item,
+      ...data,
+      totalPrice,
+      updatedAt: new Date()
+    };
+    
+    this.purchaseOrderItems.set(id, updatedItem);
+    
+    // Update purchase order total
+    await this.updatePurchaseOrderTotal(item.purchaseOrderId);
+    
+    return updatedItem;
+  }
+
+  async deletePurchaseOrderItem(id: number): Promise<boolean> {
+    const item = this.purchaseOrderItems.get(id);
+    if (!item) return false;
+    
+    const result = this.purchaseOrderItems.delete(id);
+    
+    // Update purchase order total
+    if (result) {
+      await this.updatePurchaseOrderTotal(item.purchaseOrderId);
+    }
+    
+    return result;
+  }
+
+  private async updatePurchaseOrderTotal(purchaseOrderId: number): Promise<void> {
+    const order = this.purchaseOrders.get(purchaseOrderId);
+    if (!order) return;
+    
+    const items = await this.getPurchaseOrderItems(purchaseOrderId);
+    const total = items.reduce((sum, item) => sum + item.totalPrice, 0);
+    
+    this.purchaseOrders.set(purchaseOrderId, {
+      ...order,
+      totalAmount: total,
+      updatedAt: new Date()
+    });
+  }
+
+  // Dashboard methods
+  async getDashboardStats(): Promise<{
+    totalItems: number;
+    lowStockItems: number;
+    monthlyInflow: number;
+    monthlyOutflow: number;
+    categoryDistribution: {category: string, count: number}[];
+  }> {
+    const items = Array.from(this.items.values());
+    const transactions = Array.from(this.itemTransactions.values());
+    const categories = Array.from(this.categories.values());
+    
+    // Calculate stats
+    const totalItems = items.length;
+    const lowStockItems = items.filter(
+      item => item.currentQuantity < item.minimumQuantity
+    ).length;
+    
+    // Calculate monthly transactions
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const monthlyTransactions = transactions.filter(
+      transaction => transaction.createdAt >= firstDayOfMonth
+    );
+    
+    const monthlyInflow = monthlyTransactions
+      .filter(transaction => transaction.type === TransactionType.IN)
+      .length;
+    
+    const monthlyOutflow = monthlyTransactions
+      .filter(transaction => transaction.type === TransactionType.OUT)
+      .length;
+    
+    // Calculate category distribution
+    const categoryMap = new Map<number, number>();
+    
+    items.forEach(item => {
+      const count = categoryMap.get(item.categoryId) || 0;
+      categoryMap.set(item.categoryId, count + 1);
+    });
+    
+    const categoryDistribution = categories.map(category => ({
+      category: category.name,
+      count: categoryMap.get(category.id) || 0
+    }));
+    
+    return {
+      totalItems,
+      lowStockItems,
+      monthlyInflow,
+      monthlyOutflow,
+      categoryDistribution
+    };
+  }
+}
+
+// 메모리 스토리지를 사용 (데이터베이스 문제 해결 전까지 임시 방편)
+export const storage = new MemStorage();
