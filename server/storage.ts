@@ -1248,5 +1248,5 @@ export class MemStorage implements IStorage {
   }
 }
 
-// SQL 데이터베이스 스토리지 사용
-export const storage = new DatabaseStorage();
+// 데이터베이스 연결 문제로 인해 메모리 스토리지 사용 (임시)
+export const storage = new MemStorage();
